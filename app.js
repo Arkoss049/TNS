@@ -16,7 +16,7 @@ const CATALOG = {
       ro: {
         maladie:{ ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} },
         atmp:   { ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} },
-        autre:  { ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} }
+        autre: { ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} } // Corrected line
       },
       micro:{ kind:'bnc', coef:0.66 }
     },
