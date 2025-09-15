@@ -215,7 +215,7 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
         caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
       }
     } else {
-        caisseS = cpamMax;
+        caisseS = cpamMax + 1;
         caisseE = cpamMax;
         caisseIJ = 0;
     }
@@ -422,7 +422,7 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
         caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
       }
     } else {
-        caisseS = cpamE;
+        caisseS = cpamE + 1;
         caisseE = cpamE;
         caisseIJ = 0;
     }
@@ -505,7 +505,7 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
   };
   root.onmouseleave=()=>{ tip.style.display='none'; };
 
-  const sum=$('tlSummary'); const cpamDur=Math.max(0, cpamE-cpamS), caisseDur=Math.max(0, caisseE-caisseS), modDur=Math.max(0, ctx.mod.max_j-ctx.mod.franchise);
+  const sum=$('tlSummary'); const cpamDur=Math.max(0, cpamE-cpamS), caisseDur=Math.max(0, caisseE-caisseS), modDur=Math.max(0, (ctx.mod.max_j || 0) - (ctx.mod.franchise || 0));
   const chips=[]; if(cpamDur>0) chips.push(`CPAM ${cpamDur} j • ${F2.format(cpamIJ)}/j`); if(caisseE>caisseS) chips.push(`${caisseName} ${caisseDur} j • ${F2.format(caisseIJ)}/j`); chips.push(`Moduvéo ${modDur} j • ${F2.format(ijModFinal)}/j`);
   sum.innerHTML=chips.map(c=>`<span class="chip">${c}</span>`).join('');
 }
