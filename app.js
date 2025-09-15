@@ -301,17 +301,10 @@ const profId=I.profession.value, scen=I.scenario.value;
     if (I.microSummary) I.microSummary.textContent = '';
   }
 
-  const ctx={ profId, scen, salaireM, chargesM, cibleM, cibleJ, carenceCreation, isAffiliationOK, isMicro,
-              mod:{ franchise:franchiseMod, plafond:plaf, max_j:1095, auto:modAuto, custom:ijModCustom, enabled:modEnabled },
-              horizonM, annualRef };
-  // Micro threshold warning (runs after annualRef is computed)
-  if (isMicro && profId.startsWith('ssi_') && annualRef < 4710){
-    I.warn.textContent = "⚠️ Micro-entreprise : revenu retenu < 4 710 € (10 % PASS 2025) ⇒ IJ SSI = 0 €.";
-    I.warn.classList.add('show');
-  }
 
-
-  const M=horizonM; const ro=[],mod=[],sans=[],avec=[],cpam=[],caissePro=[];
+  // Remplacement : Le tableau des montants mensuels 'mod' est renommé 'modSeries'
+  const modSeries = [];
+  const ro=[],sans=[],avec=[],cpam=[],caissePro=[];
   let anyWarn=false,carence=0,ijro=0,max=0;
 
   const selectedProf=CATALOG.profs.find(p=>p.id===profId);
@@ -319,7 +312,7 @@ const profId=I.profession.value, scen=I.scenario.value;
 
   for(let m=0;m<M;m++){
     const f = (function flowMonth(m){
-      const r=computeROMonth(m, profId, scen, ctx.annualRef, carenceCreation, isAffiliationOK, isMicro);
+      const r=computeROMonth(m, profId, scen, annualRef, carenceCreation, isAffiliationOK, isMicro);
       let ijModj=modAuto ? Math.max(0, (cibleJ - r.roIJj)) : Math.max(0, ijModCustom);
       if(plaf>0) ijModj=Math.min(ijModj, plaf);
       if(!modEnabled) ijModj=0;
@@ -327,10 +320,16 @@ const profId=I.profession.value, scen=I.scenario.value;
       const modM=dMod*ijModj;
       return { roM:r.roM, roIJj:r.roIJj, modM, sans:r.roM, avec:r.roM+modM, carence:r.carence, max:r.max, warn:r.warn, cpamM:r.cpamM, caisseProM:r.caisseProM };
     })(m);
-    ro.push(f.roM); mod.push(f.modM); sans.push(f.sans); avec.push(f.avec); cpam.push(f.cpamM); caissePro.push(f.caisseProM);
+    ro.push(f.roM); modSeries.push(f.modM); sans.push(f.sans); avec.push(f.avec); cpam.push(f.cpamM); caissePro.push(f.caisseProM);
     if(m===0){carence=f.carence; ijro=f.roIJj; max=f.max;}
     if(f.warn) anyWarn=true;
   }
+  
+  // Correction: Création de l'objet ctx pour la frise
+  const ctx={ profId, scen, salaireM, chargesM, cibleM, cibleJ, carenceCreation, isAffiliationOK, isMicro,
+              mod:{ franchise:franchiseMod, plafond:plaf, max_j:1095, auto:modAuto, custom:ijModCustom, enabled:modEnabled },
+              horizonM, annualRef };
+
 
   const charges = new Array(M).fill(chargesM), cible = new Array(M).fill(cibleM);
   const A1=Math.min(12,M), mean=a=>a.slice(0,A1).reduce((x,t)=>x+t,0)/A1, kAvec=mean(avec), kSans=mean(sans), kReste=kAvec-chargesM, kManqueSans=Math.max(0, chargesM-kSans);
@@ -343,7 +342,8 @@ const profId=I.profession.value, scen=I.scenario.value;
   $('modHint').textContent = modAuto ? `Suggestion automatique ≈ ${F2.format(Math.max(0, cibleJ - ijro))}/j` : `Montant manuel Moduvéo: ${F2.format(ijModCustom)}/j`;
   if(I.microEntrepriseBlock) I.microEntrepriseBlock.style.display = (profId.includes('ssi')) ? 'flex' : 'none';
 
-  drawChart({months:M, cpam, caissePro, mod, charges, cible, sans, avec});
+  // Remplacement: Le graphe reçoit maintenant modSeries
+  drawChart({months:M, cpam, caissePro, mod: modSeries, charges, cible, sans, avec});
 
   const roCfg=selectedProf.ro[scen];
   const caisseName = selectedProf.label.match(/\((.*?)\)/)?.[1] || 'Caisse pro';
@@ -355,11 +355,7 @@ const profId=I.profession.value, scen=I.scenario.value;
   }
   $('paveMetier').textContent=`${selectedProf.label} — scénario ${scen} • ${sous}`;
 
-  ctx.profId = I.profession.value || '';
-  ctx.annualRef = annualRef;
-  ctx.isMicro = !!(I.microEntrepriseCheck && I.microEntrepriseCheck.checked);
-  ctx.mod = mod;
-  ctx.horizonM = horizonM;
+  // Remplacement: L'objet ctx.mod n'est plus réaffecté
   renderPave(ctx, {carence, max, ijro});
   saveState();
 }
@@ -505,7 +501,10 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
   };
   root.onmouseleave=()=>{ tip.style.display='none'; };
 
-  const sum=$('tlSummary'); const cpamDur=Math.max(0, cpamE-cpamS), caisseDur=Math.max(0, caisseE-caisseS), modDur=Math.max(0, (ctx.mod.max_j || 0) - (ctx.mod.franchise || 0));
+  const sum=$('tlSummary'); const cpamDur=Math.max(0, cpamE-cpamS), caisseDur=Math.max(0, caisseE-caisseS);
+  // Correction ici
+  const modDur = Math.max(0, (ctx.mod.max_j || 1095) - (ctx.mod.franchise || 0));
+  const ijModFinal = ctx.mod.auto ? Math.max(0, ctx.cibleJ - meta.ijro) : Math.max(0, ctx.mod.custom||0);
   const chips=[]; if(cpamDur>0) chips.push(`CPAM ${cpamDur} j • ${F2.format(cpamIJ)}/j`); if(caisseE>caisseS) chips.push(`${caisseName} ${caisseDur} j • ${F2.format(caisseIJ)}/j`); chips.push(`Moduvéo ${modDur} j • ${F2.format(ijModFinal)}/j`);
   sum.innerHTML=chips.map(c=>`<span class="chip">${c}</span>`).join('');
 }
@@ -518,9 +517,7 @@ function bindUI(){
     const el=$(id); if(!el) return;
     el.addEventListener('input', simulate);
     el.addEventListener('change', (e)=>{
-      if(id==='zoom180' && e.target.checked){ zoomMode='180'; 
-  I.profession.addEventListener('change', ()=>{ toggleMicroUI(); simulate(); });
-}
+      if(id==='zoom180' && e.target.checked){ zoomMode='180'; }
       else if(id==='zoomFull' && e.target.checked){ zoomMode='full'; }
       simulate();
     });
