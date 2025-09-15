@@ -16,7 +16,7 @@ const CATALOG = {
       ro: {
         maladie:{ ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} },
         atmp:   { ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} },
-        autre: { ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} } // Corrected line
+        autre: { ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} } 
       },
       micro:{ kind:'bnc', coef:0.66 }
     },
@@ -148,6 +148,13 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
     else if(caisse.kind==='piecewise'){ const bands=caisse.bands||[]; let found=null; for(const b of bands){ if(annualRef<=b.rev_max){ found=b; break; } } caisseIJ = found ? (found.ij_j!==undefined ? found.ij_j : ijFromFormula(found.f, annualRef, I.microEntrepriseCheck?.checked)) : 0; }
     const caisseDays=coveredDays(start, m, (caisse.max_j||1095)+extra); const caisseM=caisseDays*(caisseIJ||0);
     const roIJj=currentIJjForMonth(m, cpam_c, cpamMax, cpam_ij, start, caisseIJ);
+    
+    // Gérer le cas où il n'y a pas de caisse pro définie
+    if (!roConfig.caisse || Object.keys(roConfig.caisse).length === 0) {
+      const roIJj = cpam_ij;
+      return { roM: cpamM, roIJj, carence: cpam_c, max: cpamMax, warn: false, cpamM, caisseProM: 0 };
+    }
+
     return { roM: cpamM + caisseM, roIJj, carence: cpam_c, max: Math.max(90+extra, (caisse.max_j||0)+extra), warn:false, cpamM, caisseProM: caisseM };
   }
 
@@ -403,7 +410,7 @@ function bindUI(){
     el.addEventListener('input', simulate);
     el.addEventListener('change', (e)=>{
       if(id==='zoom180' && e.target.checked){ zoomMode='180'; 
-  I.profession.addEventListener('change', ()=>{ toggleMicroUI(); recomputeCAFromMonthly(); simulate(); });
+  I.profession.addEventListener('change', ()=>{ toggleMicroUI(); simulate(); });
 }
       else if(id==='zoomFull' && e.target.checked){ zoomMode='full'; }
       simulate();
