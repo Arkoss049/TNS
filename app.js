@@ -93,7 +93,17 @@ const $ = id => document.getElementById(id);
 function parseEuro(v){ if(v===null||v===undefined) return 0; if(typeof v==='number') return v; let s=(''+v).trim().replace(/[€$£₤]/g,'').replace(/[\u00A0\u202F\u2009\s]/g,'').replace(/,/g,'.'); const p=s.split('.'); if(p.length>2){ const d=p.pop(); s=p.join('')+'.'+d; } const x=parseFloat(s); return Number.isFinite(x)?x:0; }
 function clamp(val, min, max) { return Math.min(Math.max(val, min), max); }
 function coveredDays(afterDays, m, maxDays = Infinity, startOffsetDay = 0) { const dim=[31,28,31,30,31,30,31,31,30,31,30,31]; let monthStartDay=startOffsetDay; for(let k=0;k<m;k++){ monthStartDay+=dim[k%12]; } const monthEndDay=monthStartDay+dim[m%12]; const a=Math.max(afterDays, monthStartDay); const b=Math.min(maxDays, monthEndDay); return Math.max(0, b-a); }
-function currentIJjForMonth(m, cpam_c, cpamMax, cpamIJ, caisseStart, caisseIJ){ const dCpam=coveredDays(cpam_c, m, cpamMax); const dCaisse=coveredDays(caisseStart, m, Infinity); if(dCpam===0 && dCaisse>0) return caisseIJ; if(dCpam>0 && dCaisse===0) return cpamIJ; const tot=dCpam+dCaisse; return tot? (cpamIJ*dCpam + caisseIJ*dCaisse)/tot : 0; }
+
+// Fonction pour gérer les IJ
+function currentIJjForMonth(m, cpam_c, cpamMax, cpamIJ, caisseStart, caisseIJ){ 
+  const dCpam=coveredDays(cpam_c, m, cpamMax); 
+  const dCaisse=coveredDays(caisseStart, m, Infinity); 
+  if(dCpam===0 && dCaisse>0) return caisseIJ; 
+  if(dCpam>0 && dCaisse===0) return cpamIJ; 
+  const tot=dCpam+dCaisse; 
+  return tot? (cpamIJ*dCpam + caisseIJ*dCaisse)/tot : 0; 
+}
+
 
 /* ---------- État & persistance ---------- */
 const I={
@@ -143,17 +153,20 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
     const cpamMax=(Number.isFinite(roConfig.cpam?.max_j)?roConfig.cpam.max_j:90)+extra;
     const cpamDays=coveredDays(cpam_c, m, cpamMax); const cpamM=cpamDays*cpam_ij;
 
-    const caisse=roConfig.caisse||{}; const start=(caisse.start_j||91)+extra; let caisseIJ=0;
-    if(caisse.kind==='fixed'){ caisseIJ=caisse.ij_j ?? 0; }
-    else if(caisse.kind==='piecewise'){ const bands=caisse.bands||[]; let found=null; for(const b of bands){ if(annualRef<=b.rev_max){ found=b; break; } } caisseIJ = found ? (found.ij_j!==undefined ? found.ij_j : ijFromFormula(found.f, annualRef, I.microEntrepriseCheck?.checked)) : 0; }
-    const caisseDays=coveredDays(start, m, (caisse.max_j||1095)+extra); const caisseM=caisseDays*(caisseIJ||0);
-    
-    // Correction de la logique pour les PL sans caisse propre
-    if (!roConfig.caisse || Object.keys(roConfig.caisse).length === 0) {
-      const roIJj = cpam_ij;
-      return { roM: cpamM, roIJj, carence: cpam_c, max: cpamMax, warn: false, cpamM, caisseProM: 0 };
-    }
+    const caisse=roConfig.caisse||{}; 
+    const isCaisseDefined = Object.keys(caisse).length > 0;
+    const start=isCaisseDefined ? (caisse.start_j||91)+extra : cpamMax;
+    let caisseIJ=0;
 
+    if(isCaisseDefined){
+        if(caisse.kind==='fixed'){ caisseIJ=caisse.ij_j ?? 0; }
+        else if(caisse.kind==='piecewise'){ const bands=caisse.bands||[]; let found=null; for(const b of bands){ if(annualRef<=b.rev_max){ found=b; break; } } caisseIJ = found ? (found.ij_j!==undefined ? found.ij_j : ijFromFormula(found.f, annualRef, I.microEntrepriseCheck?.checked)) : 0; }
+    } else {
+        caisseIJ = 0;
+    }
+    const caisseDays=coveredDays(start, m, (caisse.max_j||1095)+extra); 
+    const caisseM=caisseDays*(caisseIJ||0);
+    
     const roIJj=currentIJjForMonth(m, cpam_c, cpamMax, cpam_ij, start, caisseIJ);
     return { roM: cpamM + caisseM, roIJj, carence: cpam_c, max: Math.max(90+extra, (caisse.max_j||0)+extra), warn:false, cpamM, caisseProM: caisseM };
   }
@@ -329,10 +342,26 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
   let cpamS=0, cpamE=0, caisseS=0, caisseE=0, cpamIJ=0, caisseIJ=0;
   if (roCfg.ro_kind==='pl_caisse'){
     cpamS=(roCfg.cpam?.carence_j ?? 3)+extra; cpamE=(roCfg.cpam?.max_j ?? 90)+extra; cpamIJ=ijFromFormula(roCfg.cpam?.f || 'cpam_1_730e', annualRef, I.microEntrepriseCheck?.checked);
-    caisseS=(roCfg.caisse?.start_j ?? 91)+extra; caisseE=meta.max;
-    if(roCfg.caisse?.kind==='fixed'){ caisseIJ=roCfg.caisse.ij_j ?? 0; }
-    else if(roCfg.caisse?.kind==='piecewise'){ let found=null; for(const b of roCfg.caisse.bands){ if(annualRef<=b.rev_max){ found=b; break; } } caisseIJ=found ? (found.ij_j ?? ijFromFormula(found.f, annualRef, I.microEntrepriseCheck?.checked)) : 0; }
-    if (!roCfg.caisse || Object.keys(roCfg.caisse).length === 0) {
+    
+    const caisse=roCfg.caisse||{};
+    const isCaisseDefined = Object.keys(caisse).length > 0;
+    
+    if (isCaisseDefined) {
+      caisseS = (caisse.start_j || 91) + extra;
+      caisseE = meta.max;
+      if(caisse.kind === 'fixed'){
+        caisseIJ = caisse.ij_j ?? 0;
+      } else if(caisse.kind === 'piecewise'){
+        let found = null;
+        for(const b of caisse.bands){
+          if(annualRef <= b.rev_max){
+            found = b;
+            break;
+          }
+        }
+        caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, I.microEntrepriseCheck?.checked)) : 0;
+      }
+    } else {
       caisseS = cpamE + 1;
       caisseE = cpamE;
       caisseIJ = 0;
