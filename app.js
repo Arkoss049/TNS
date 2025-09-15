@@ -332,6 +332,10 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
     caisseS=(roCfg.caisse?.start_j ?? 91)+extra; caisseE=meta.max;
     if(roCfg.caisse?.kind==='fixed'){ caisseIJ=roCfg.caisse.ij_j ?? 0; }
     else if(roCfg.caisse?.kind==='piecewise'){ let found=null; for(const b of roCfg.caisse.bands){ if(annualRef<=b.rev_max){ found=b; break; } } caisseIJ=found ? (found.ij_j ?? ijFromFormula(found.f, annualRef, I.microEntrepriseCheck?.checked)) : 0; }
+    // Ajout d'une vérification pour le cas de l'absence de caisse pro
+    if (!roCfg.caisse || Object.keys(roCfg.caisse).length === 0) {
+      caisseIJ = 0;
+    }
   } else {
     cpamS=(roCfg.carence_j||0)+extra; cpamE=meta.max; cpamIJ=(roCfg.ij_j ?? ijFromFormula(roCfg.f, annualRef, I.microEntrepriseCheck?.checked)) || 0;
   }
