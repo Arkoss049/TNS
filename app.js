@@ -136,39 +136,84 @@ function saveState(){ try{ const s={ profession:I.profession?.value, scenario:I.
 function ijFromFormula(name, annualRef, isMicro=false){ const f=CATALOG.formulas[name]; if(!f) return 0; if (name==='ssi_1_730e' && isMicro && annualRef<4710) return 0; let ij=(annualRef||0)/730; let min=f.min_j; if(name==='ssi_1_730e' && isMicro){ min=0; } return clamp(ij, min, f.max_j); }
 function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliationOK, isMicro){
   const p=CATALOG.profs.find(x=>x.id===prof); const cfg=p?.ro?.[scen]; if(!cfg){ return {roM:0,roIJj:0,carence:0,max:0,warn:true,cpamM:0,caisseProM:0}; }
-  if (!isAffiliationOK){ return { roM:0, roIJj:0, carence:(cfg.carence_j||0)+carenceCreation, max:(cfg.max_j||0)+carenceCreation, warn:false, cpamM:0, caisseProM:0 }; }
-  annualRef = (annualRef||0); const extra=Math.max(0, parseInt(I.carenceCreation.value)||0); const roConfig=p.ro[I.scenario.value]; const hasCpam=(roConfig.cpam!=null);
+  
+  // Correction 1: Gérer le cas d'affiliation non OK
+  if (!isAffiliationOK){ 
+    const fallbackMax = (cfg.max_j || 0) + carenceCreation || 90;
+    return { roM:0, roIJj:0, carence:(cfg.carence_j||0)+carenceCreation, max:fallbackMax, warn:false, cpamM:0, caisseProM:0 };
+  }
 
-  if(roConfig.ro_kind==='formula'){ const ijj=ijFromFormula(roConfig.f, annualRef, isMicro); const d=coveredDays((roConfig.carence_j||0)+extra, m, (roConfig.max_j||0)+extra); const roM=d*ijj; return {roM, roIJj:ijj, carence:(roConfig.carence_j||0)+extra, max:(roConfig.max_j||0)+extra, warn:false, cpamM:hasCpam?roM:0, caisseProM:hasCpam?0:roM}; }
+  annualRef = (annualRef||0); 
+  const extra = Math.max(0, parseInt(I.carenceCreation.value)||0); 
+  const roConfig = p.ro[I.scenario.value]; 
+  const hasCpam = (roConfig.cpam != null);
+
+  if(roConfig.ro_kind==='formula'){ 
+    const ijj=ijFromFormula(roConfig.f, annualRef, isMicro); 
+    const d=coveredDays((roConfig.carence_j||0)+extra, m, (roConfig.max_j||0)+extra); 
+    const roM=d*ijj; 
+    return {roM, roIJj:ijj, carence:(roConfig.carence_j||0)+extra, max:(roConfig.max_j||0)+extra, warn:false, cpamM:hasCpam?roM:0, caisseProM:hasCpam?0:roM}; 
+  }
 
   if(roConfig.ro_kind==='fixed'){
-    if (p.id==='cnbf_avocat'){ const d=coveredDays((roConfig.carence_j||0)+extra, m, (roConfig.max_j||0)+extra); const roM=d*90; return {roM, roIJj:90, carence:(roConfig.carence_j||0)+extra, max:(roConfig.max_j||0)+extra, warn:false, cpamM:0, caisseProM:roM}; }
-    if (p.id==='msa_exploitant' && roConfig.piecewise_j){ const start=(roConfig.carence_j||0)+extra; const end=(roConfig.max_j||Infinity)+extra; const d1=coveredDays(start, m, Math.min(start+28, end)); const d2=coveredDays(start+28, m, end); const roM=d1*25.79 + d2*34.39; const roIJj=(d1+d2)?(roM/(d1+d2)):0; return {roM, roIJj, carence:start, max:end, warn:false, cpamM:roM, caisseProM:0}; }
-    const ijj=roConfig.ij_j ?? 0; const d=coveredDays((roConfig.carence_j||0)+extra, m, (roConfig.max_j||0)+extra); const roM=d*ijj; return {roM, roIJj:ijj, carence:(roConfig.carence_j||0)+extra, max:(roConfig.max_j||0)+extra, warn:false, cpamM:hasCpam?roM:0, caisseProM:hasCpam?0:roM};
+    if (p.id==='cnbf_avocat'){ 
+      const d=coveredDays((roConfig.carence_j||0)+extra, m, (roConfig.max_j||0)+extra); 
+      const roM=d*90; 
+      return {roM, roIJj:90, carence:(roConfig.carence_j||0)+extra, max:(roConfig.max_j||0)+extra, warn:false, cpamM:0, caisseProM:roM}; 
+    }
+    if (p.id==='msa_exploitant' && roConfig.piecewise_j){ 
+      const start=(roConfig.carence_j||0)+extra; 
+      const end=(roConfig.max_j||Infinity)+extra; 
+      const d1=coveredDays(start, m, Math.min(start+28, end)); 
+      const d2=coveredDays(start+28, m, end); 
+      const roM=d1*25.79 + d2*34.39; 
+      const roIJj=(d1+d2)?(roM/(d1+d2)):0; 
+      return {roM, roIJj, carence:start, max:end, warn:false, cpamM:roM, caisseProM:0}; 
+    }
+    const ijj=roConfig.ij_j ?? 0; 
+    const d=coveredDays((roConfig.carence_j||0)+extra, m, (roConfig.max_j||0)+extra); 
+    const roM=d*ijj; 
+    return {roM, roIJj:ijj, carence:(roConfig.carence_j||0)+extra, max:(roConfig.max_j||0)+extra, warn:false, cpamM:hasCpam?roM:0, caisseProM:hasCpam?0:roM};
   }
 
   if(roConfig.ro_kind==='pl_caisse'){
     const cpam_c=(roConfig.cpam?.carence_j ?? 3)+extra;
-    const cpam_ij=ijFromFormula(roConfig.cpam?.f || 'cpam_1_730e', annualRef, I.microEntrepriseCheck?.checked);
+    const cpam_ij=ijFromFormula(roConfig.cpam?.f || 'cpam_1_730e', annualRef, isMicro);
     const cpamMax=(Number.isFinite(roConfig.cpam?.max_j)?roConfig.cpam.max_j:90)+extra;
     const cpamDays=coveredDays(cpam_c, m, cpamMax); const cpamM=cpamDays*cpam_ij;
 
     const caisse=roConfig.caisse||{}; 
     const isCaisseDefined = Object.keys(caisse).length > 0;
-    const start=isCaisseDefined ? (caisse.start_j||91)+extra : cpamMax;
-    let caisseIJ=0;
+    
+    let caisseS = 0;
+    let caisseE = 0;
+    let caisseIJ = 0;
 
-    if(isCaisseDefined){
-        if(caisse.kind==='fixed'){ caisseIJ=caisse.ij_j ?? 0; }
-        else if(caisse.kind==='piecewise'){ const bands=caisse.bands||[]; let found=null; for(const b of bands){ if(annualRef<=b.rev_max){ found=b; break; } } caisseIJ = found ? (found.ij_j!==undefined ? found.ij_j : ijFromFormula(found.f, annualRef, I.microEntrepriseCheck?.checked)) : 0; }
+    if (isCaisseDefined) {
+      caisseS = (caisse.start_j || 91) + extra;
+      caisseE = (caisse.max_j || 1095) + extra;
+      if(caisse.kind === 'fixed'){
+        caisseIJ = caisse.ij_j ?? 0;
+      } else if(caisse.kind === 'piecewise'){
+        let found = null;
+        for(const b of caisse.bands){
+          if(annualRef <= b.rev_max){
+            found = b;
+            break;
+          }
+        }
+        caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
+      }
     } else {
+        caisseS = cpamMax;
+        caisseE = cpamMax;
         caisseIJ = 0;
     }
-    const caisseDays=coveredDays(start, m, (caisse.max_j||1095)+extra); 
+    const caisseDays=coveredDays(caisseS, m, caisseE); 
     const caisseM=caisseDays*(caisseIJ||0);
     
-    const roIJj=currentIJjForMonth(m, cpam_c, cpamMax, cpam_ij, start, caisseIJ);
-    return { roM: cpamM + caisseM, roIJj, carence: cpam_c, max: Math.max(90+extra, (caisse.max_j||0)+extra), warn:false, cpamM, caisseProM: caisseM };
+    const roIJj=currentIJjForMonth(m, cpam_c, cpamMax, cpam_ij, caisseS, caisseIJ);
+    return { roM: cpamM + caisseM, roIJj, carence: cpam_c, max: Math.max(cpamMax, caisseE), warn:false, cpamM, caisseProM: caisseM };
   }
 
   return { roM:0, roIJj:0, carence:0, max:0, warn:true, cpamM:0, caisseProM:0 };
@@ -348,7 +393,7 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
     
     if (isCaisseDefined) {
       caisseS = (caisse.start_j || 91) + extra;
-      caisseE = meta.max;
+      caisseE = (caisse.max_j || 1095) + extra;
       if(caisse.kind === 'fixed'){
         caisseIJ = caisse.ij_j ?? 0;
       } else if(caisse.kind === 'piecewise'){
@@ -362,26 +407,42 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
         caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, I.microEntrepriseCheck?.checked)) : 0;
       }
     } else {
-      caisseS = cpamE + 1;
-      caisseE = cpamE;
-      caisseIJ = 0;
+        caisseS = cpamE + 1;
+        caisseE = cpamE;
+        caisseIJ = 0;
     }
   } else {
     cpamS=(roCfg.carence_j||0)+extra; cpamE=meta.max; cpamIJ=(roCfg.ij_j ?? ijFromFormula(roCfg.f, annualRef, I.microEntrepriseCheck?.checked)) || 0;
   }
 
 
-  const W=root.clientWidth||600, pad=14; const worldMax=Math.max(meta.max, ctx.mod.max_j, 365); const zoomMax=(zoomMode==='180')?180:worldMax;
+  const W=root.clientWidth||600, pad=14; 
+  // Correction 2: Empêcher meta.max d'être 0 si la profession est 'lib_nr'
+  const maxToUse = (profId === 'lib_nr' && meta.max === 0) ? 90 : meta.max;
+  const worldMax = Math.max(maxToUse, ctx.mod.max_j, 365); 
+  const zoomMax = (zoomMode === '180') ? 180 : worldMax;
   const px=d=>Math.round(pad + (Math.min(d,zoomMax)/zoomMax)*(W - pad*2)); const invPx=x=>Math.round(((x-pad)/(W - pad*2))*zoomMax);
 
   function setBar(el, dStart, dEnd, labelText){
     if(!el) return;
-    const s=Math.max(0,dStart), e=Math.min(zoomMax,dEnd);
+    let s=Math.max(0, dStart), e=Math.min(zoomMax, dEnd);
+    // Correction 3: Gérer le cas où start = end pour les barres de 1px
+    if (s === e && s > 0) e = s + 0.5;
     const L=Math.max(px(s),pad), R=Math.min(px(e),W-pad);
-    const w=Math.max(0,R-L);
-    el.style.left=L+'px'; el.style.width=w+'px'; el.style.opacity=(w>0)?'1':'0';
+    const w=Math.max(0, R-L);
+    el.style.left=L+'px';
+    el.style.width=w+'px';
+    el.style.opacity=(w>0)?'1':'0';
     if(labelText) el.setAttribute('data-label', labelText);
   }
+
+  // --- Ajout des garde-fous de débogage ---
+  ['timeline2','barCreation','barCarence','barCpam','barCaisse','barFranchise','barMod',
+  'tagEndRO','tagDebutMod','tlRuler','tlCursor','tlPanelBody','labelCaisse','tlSummary']
+  .forEach(id=>{ if(!$(id)) console.warn('❌ id manquant :', id); });
+
+  console.log('[frise]', { cpamS, cpamE, caisseS, caisseE, cpamIJ, caisseIJ, carence, extra, affOK, zoomMode, zoomMax });
+  // --- Fin des garde-fous ---
 
   setBar(barCreation, 0, extra, extra>0?`J0→J${extra}`:'');
   if(!affOK){ setBar(barCarence, 0, meta.max, `Affiliation < 12 mois`); }
