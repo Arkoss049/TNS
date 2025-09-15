@@ -139,8 +139,18 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
   
   // Correction 1: Gérer le cas d'affiliation non OK
   if (!isAffiliationOK){ 
-    const fallbackMax = (cfg.max_j || 0) + carenceCreation || 90;
-    return { roM:0, roIJj:0, carence:(cfg.carence_j||0)+carenceCreation, max:fallbackMax, warn:false, cpamM:0, caisseProM:0 };
+    const baseCar = Number(cfg.carence_j || 0) + Number(carenceCreation || 0);
+    const baseMax = Number(cfg.max_j || 0) + Number(carenceCreation || 0);
+    const fallbackMax = baseMax > baseCar ? baseMax : (90 + Number(carenceCreation || 0));
+    return {
+      roM: 0,
+      roIJj: 0,
+      carence: baseCar,
+      max: fallbackMax,
+      warn: false,
+      cpamM: 0,
+      caisseProM: 0
+    };
   }
 
   annualRef = (annualRef||0); 
@@ -356,6 +366,11 @@ const profId=I.profession.value, scen=I.scenario.value;
 
 /* ---------- Frise + UX ---------- */
 function renderPave(ctx, meta){
+  // --- Garde-fous de vérification des IDs ---
+  ['timeline2','barCreation','barCarence','barCpam','barCaisse','barFranchise','barMod',
+  'tagEndRO','tagDebutMod','tlRuler','tlCursor','tlPanelBody','labelCaisse','tlSummary']
+  .forEach(id=>{ if(!$(id)) console.warn('❌ id manquant :', id); });
+
   // normalized context
   const profId     = (ctx && ctx.profId) ? ctx.profId : (I.profession?.value || '');
   const annualRef  = (ctx && typeof ctx.annualRef !== 'undefined') ? Number(ctx.annualRef) : Number((parseEuro($('salaireM').value)||0)*12);
@@ -386,7 +401,7 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
 
   let cpamS=0, cpamE=0, caisseS=0, caisseE=0, cpamIJ=0, caisseIJ=0;
   if (roCfg.ro_kind==='pl_caisse'){
-    cpamS=(roCfg.cpam?.carence_j ?? 3)+extra; cpamE=(roCfg.cpam?.max_j ?? 90)+extra; cpamIJ=ijFromFormula(roCfg.cpam?.f || 'cpam_1_730e', annualRef, I.microEntrepriseCheck?.checked);
+    cpamS=(roCfg.cpam?.carence_j ?? 3)+extra; cpamE=(roCfg.cpam?.max_j ?? 90)+extra; cpamIJ=ijFromFormula(roCfg.cpam?.f || 'cpam_1_730e', annualRef, isMicro);
     
     const caisse=roCfg.caisse||{};
     const isCaisseDefined = Object.keys(caisse).length > 0;
@@ -404,45 +419,44 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
             break;
           }
         }
-        caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, I.microEntrepriseCheck?.checked)) : 0;
+        caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
       }
     } else {
-        caisseS = cpamE + 1;
+        caisseS = cpamE;
         caisseE = cpamE;
         caisseIJ = 0;
     }
   } else {
-    cpamS=(roCfg.carence_j||0)+extra; cpamE=meta.max; cpamIJ=(roCfg.ij_j ?? ijFromFormula(roCfg.f, annualRef, I.microEntrepriseCheck?.checked)) || 0;
+    cpamS=(roCfg.carence_j||0)+extra; cpamE=meta.max; cpamIJ=(roCfg.ij_j ?? ijFromFormula(roCfg.f, annualRef, isMicro)) || 0;
   }
 
-
-  const W=root.clientWidth||600, pad=14; 
-  // Correction 2: Empêcher meta.max d'être 0 si la profession est 'lib_nr'
-  const maxToUse = (profId === 'lib_nr' && meta.max === 0) ? 90 : meta.max;
-  const worldMax = Math.max(maxToUse, ctx.mod.max_j, 365); 
-  const zoomMax = (zoomMode === '180') ? 180 : worldMax;
-  const px=d=>Math.round(pad + (Math.min(d,zoomMax)/zoomMax)*(W - pad*2)); const invPx=x=>Math.round(((x-pad)/(W - pad*2))*zoomMax);
+  // Correction 2: Gérer la largeur des barres de 1px
+  const W = root.clientWidth || 600, pad = 14;
+  const maxToUse = (meta.max && meta.max > 0) ? meta.max : 90;
+  const worldMax = Math.max(maxToUse, ctx.mod.max_j || 0, 365);
+  const zoomMax  = (zoomMode === '180') ? 180 : worldMax;
+  const px = d => Math.round(pad + (Math.min(d, zoomMax) / zoomMax) * (W - pad * 2));
+  const invPx = x => Math.round(((x - pad) / (W - pad * 2)) * zoomMax);
 
   function setBar(el, dStart, dEnd, labelText){
-    if(!el) return;
-    let s=Math.max(0, dStart), e=Math.min(zoomMax, dEnd);
-    // Correction 3: Gérer le cas où start = end pour les barres de 1px
-    if (s === e && s > 0) e = s + 0.5;
-    const L=Math.max(px(s),pad), R=Math.min(px(e),W-pad);
-    const w=Math.max(0, R-L);
-    el.style.left=L+'px';
-    el.style.width=w+'px';
-    el.style.opacity=(w>0)?'1':'0';
-    if(labelText) el.setAttribute('data-label', labelText);
+    if (!el) return;
+    let s = Math.max(0, Number(dStart) || 0);
+    let e = Math.min(zoomMax, Number(dEnd)   || 0);
+
+    // Si start==end mais segment logique, on montre ~0.5j pour visibilité
+    if (e <= s && (s > 0 || e > 0)) e = s + 0.5;
+
+    const L = Math.max(px(s), pad), R = Math.min(px(e), W - pad);
+    const w = Math.max(0, R - L);
+
+    el.style.left = L + 'px';
+    el.style.width = w + 'px';
+    el.style.opacity = (w > 0) ? '1' : '0';
+    if (labelText) el.setAttribute('data-label', labelText);
   }
 
-  // --- Ajout des garde-fous de débogage ---
-  ['timeline2','barCreation','barCarence','barCpam','barCaisse','barFranchise','barMod',
-  'tagEndRO','tagDebutMod','tlRuler','tlCursor','tlPanelBody','labelCaisse','tlSummary']
-  .forEach(id=>{ if(!$(id)) console.warn('❌ id manquant :', id); });
-
+  // Log de diagnostic
   console.log('[frise]', { cpamS, cpamE, caisseS, caisseE, cpamIJ, caisseIJ, carence, extra, affOK, zoomMode, zoomMax });
-  // --- Fin des garde-fous ---
 
   setBar(barCreation, 0, extra, extra>0?`J0→J${extra}`:'');
   if(!affOK){ setBar(barCarence, 0, meta.max, `Affiliation < 12 mois`); }
