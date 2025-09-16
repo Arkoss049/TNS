@@ -635,3 +635,236 @@ function bindUI(){
 
   window.addEventListener('resize', simulate);
 })();
+
+
+
+/* ============================================================================
+  [INTEGRÉ] Patch "Vue Jours" — bascule Jours/Mois et rendu quotidien
+  ----------------------------------------------------------------------------
+  - Fenêtre jours (slider 60→365 ; défaut 120) + bouton 🗓 Jours.
+  - Barres empilées : RO (CPAM + Caisse) + Moduvéo ; Lignes : Charges/j, Cible/j.
+  - S'appuie sur vos règles existantes (CPAM/caisse/Mod).
+============================================================================= */
+(function(){
+  if (!window.Chart) { console.warn('Chart.js requis pour la Vue Jours.'); return; }
+  if (typeof window.simulate !== 'function') { console.warn('simulate() introuvable : votre simulateur doit être chargé avant ce bloc.'); return; }
+
+  let viewByDays = false;
+  let dailyChartInstance = null;
+
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const F2fmt = (function(){
+    try{ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:2}); }
+    catch(e){ return {format:(x)=> (x.toFixed?x.toFixed(2):x)+' €'}; }
+  })();
+  const F2main = (typeof window.F2 !== 'undefined') ? window.F2 : F2fmt;
+
+  function parseEuro(v){
+    if(v===null||v===undefined) return 0; if(typeof v==='number') return v;
+    let s=(''+v).trim().replace(/[€$£₤]/g,'').replace(/[\u00A0\u202F\u2009\s]/g,'').replace(/,/g,'.');
+    const p=s.split('.'); if(p.length>2){ const d=p.pop(); s=p.join('')+'.'+d; }
+    const x=parseFloat(s); return Number.isFinite(x)?x:0;
+  }
+
+  function buildCtxFromInputs(){
+    const profId = $('profession')?.value || 'lib_nr';
+    const scen   = $('scenario')?.value   || 'maladie';
+    const salaireM = parseEuro($('salaireM')?.value)||0;
+    const chargesM = parseEuro($('chargesM')?.value)||0;
+    const cibleSame = !!$('cibleSame')?.checked;
+    const cibleM = cibleSame ? salaireM : (parseEuro($('cibleM')?.value)||0);
+    const cibleJ = cibleM/30;
+    const carenceCreation = Math.max(0, parseInt($('carenceCreation')?.value)||0);
+    const isAffiliationOK = !($('affiliation-check') && $('affiliation-check').checked);
+    const isMicro = !!($('microEntrepriseCheck') && $('microEntrepriseCheck').checked);
+
+    const franchiseMod = Math.max(0, parseInt($('franchiseMod')?.value)||0);
+    const plaf = parseEuro($('plafondMod')?.value)||0;
+    const modAuto = !!$('modAuto')?.checked;
+    const ijModCustom = parseEuro($('ijModCustom')?.value)||0;
+
+    let annualRef = salaireM * 12;
+    if (isMicro){
+      const act = $('microAct')?.value || 'bic_vente';
+      const ca  = parseEuro($('microCA')?.value)||0;
+      const coef = (act==='bic_vente') ? 0.29 : (act==='bic_services') ? 0.50 : 0.66;
+      if (ca>0) annualRef = ca * coef;
+    }
+
+    return {
+      profId, scen, salaireM, chargesM, cibleM, cibleJ,
+      carenceCreation, isAffiliationOK, isMicro,
+      mod:{ franchise:franchiseMod, plafond:plaf, max_j:1095, auto:modAuto, custom:ijModCustom, enabled: ($('modToggle') ? !!$('modToggle').checked : true) },
+      annualRef
+    };
+  }
+
+  function ijFromFormulaLocal(name, annualRef, isMicro){
+    const ijFromFormula = window.ijFromFormula;
+    if (typeof ijFromFormula === 'function') return ijFromFormula(name, annualRef, isMicro);
+    const f = (window.CATALOG && window.CATALOG.formulas) ? window.CATALOG.formulas[name] : null;
+    if (!f) return 0;
+    if (name==='ssi_1_730e' && isMicro && annualRef<4710) return 0;
+    let ij=(annualRef||0)/730;
+    let min=f.min_j;
+    if(name==='ssi_1_730e' && isMicro){ min=0; }
+    ij = Math.max(min, Math.min(ij, f.max_j));
+    return ij;
+  }
+
+  function buildDailySeries(ctx, maxDays){
+    const CATALOG = window.CATALOG || {};
+    const prof = (CATALOG.profs||[]).find(p=>p.id===ctx.profId);
+    const roCfg = prof?.ro?.[ctx.scen];
+    const extra = Math.max(0, parseInt(ctx.carenceCreation)||0);
+
+    let cpamS=0, cpamE=0, caisseS=Infinity, caisseE=-Infinity, cpamIJ=0, caisseIJ=0;
+    if (!roCfg){
+      return { labels:[], cpam:[], caisse:[], mod:[], sans:[], avec:[], charges:[], cible:[] };
+    }
+
+    if (roCfg.ro_kind==='pl_caisse'){
+      cpamS=(roCfg.cpam?.carence_j ?? 3)+extra;
+      cpamE=(roCfg.cpam?.max_j ?? 90)+extra;
+      cpamIJ = ijFromFormulaLocal(roCfg.cpam?.f || 'cpam_1_730e', ctx.annualRef, ctx.isMicro);
+
+      const c = roCfg.caisse || {};
+      if (Object.keys(c).length){
+        caisseS=(c.start_j||91)+extra;
+        caisseE=(c.max_j||1095)+extra;
+        if (c.kind==='fixed'){ caisseIJ=c.ij_j ?? 0; }
+        else if (c.kind==='piecewise'){
+          const bands = c.bands||[]; let found = null;
+          for (const b of bands){ if(ctx.annualRef <= b.rev_max){ found = b; break; } }
+          caisseIJ = found ? (found.ij_j ?? ijFromFormulaLocal(found.f, ctx.annualRef, ctx.isMicro)) : 0;
+        }
+      } else {
+        caisseS = cpamE + 1; caisseE = cpamE; caisseIJ = 0;
+      }
+    } else {
+      cpamS=(roCfg.carence_j||0)+extra;
+      cpamE=(roCfg.max_j||0)+extra;
+      cpamIJ = roCfg.ij_j ?? ijFromFormulaLocal(roCfg.f, ctx.annualRef, ctx.isMicro);
+    }
+
+    const res={labels:[], cpam:[], caisse:[], mod:[], sans:[], avec:[], charges:[], cible:[]};
+    const J = Math.min(maxDays, Math.max(cpamE, caisseE, ctx.mod.max_j||0));
+
+    for(let d=0; d<=J; d++){
+      let cp=0, cs=0, ro=0;
+      if(ctx.isAffiliationOK){
+        if(d>=cpamS && d<=cpamE){ cp=cpamIJ; ro+=cpamIJ; }
+        else if(d>=caisseS && d<=caisseE){ cs=caisseIJ; ro+=caisseIJ; }
+      }
+      let mod=0;
+      if(ctx.mod.enabled && d>=ctx.mod.franchise && d<=ctx.mod.max_j){
+        const roIJduJour = cp ? cpamIJ : (cs ? caisseIJ : 0);
+        const auto = Math.max(0, ctx.cibleJ - roIJduJour);
+        const wanted = ctx.mod.auto ? auto : Math.max(0, ctx.mod.custom||0);
+        mod = (ctx.mod.plafond>0) ? Math.min(wanted, ctx.mod.plafond) : wanted;
+      }
+
+      res.labels.push('J'+d);
+      res.cpam.push(cp);
+      res.caisse.push(cs);
+      res.mod.push(mod);
+      res.sans.push(ro);
+      res.avec.push(ro+mod);
+      res.charges.push((ctx.chargesM||0)/30);
+      res.cible.push((ctx.cibleM||0)/30);
+    }
+    return res;
+  }
+
+  function drawDailyChart(ctx){
+    const rangeEl = $('daysWindow');
+    const valEl = $('daysWindowVal');
+    const maxDays = clamp(parseInt(rangeEl?.value || '120',10), 60, 365);
+    if (valEl) valEl.textContent = String(maxDays);
+
+    if (window.chartInstance && typeof window.chartInstance.destroy==='function'){
+      try{ window.chartInstance.destroy(); }catch(_){}
+      window.chartInstance = null;
+    }
+    if (dailyChartInstance && typeof dailyChartInstance.destroy==='function'){
+      try{ dailyChartInstance.destroy(); }catch(_){}
+      dailyChartInstance = null;
+    }
+
+    const S = buildDailySeries(ctx, maxDays);
+    const canvas = $('chart');
+    if (!canvas || !canvas.getContext) return;
+    const c = canvas.getContext('2d');
+    const maxV = Math.max(0, ...S.avec, ...S.cible) * 1.25;
+    const fmt = (F2main.format ? F2main.format.bind(F2main) : F2fmt.format.bind(F2fmt));
+
+    dailyChartInstance = new Chart(c,{
+      type:'bar',
+      data:{
+        labels:S.labels,
+        datasets:[
+          {label:'RO (CPAM)',   data:S.cpam,   stack:'rev', borderWidth:0, backgroundColor:'#6ae3ff'},
+          {label:'RO (Caisse)', data:S.caisse, stack:'rev', borderWidth:0, backgroundColor:'#449fbe'},
+          {label:'Moduvéo PRO', data:S.mod,    stack:'rev', borderWidth:0, backgroundColor:'#80f2a1'},
+          {label:'Charges /j',  data:S.charges, type:'line', yAxisID:'y1', borderDash:[6,6], pointRadius:0, tension:0},
+          {label:'Cible /j',    data:S.cible,   type:'line', yAxisID:'y1', pointRadius:0, tension:0.2}
+        ]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+        scales:{
+          x:{stacked:true, ticks:{maxRotation:0, autoSkip:true}},
+          y:{stacked:true, min:0, max:Math.ceil(maxV/10)*10, ticks:{callback:v=> fmt(v)}},
+          y1:{stacked:false, min:0, max:Math.ceil(maxV/10)*10, ticks:{display:false}, grid:{drawOnChartArea:false}}
+        },
+        plugins:{ tooltip:{ callbacks:{ footer:(items)=>{
+          const i=items[0].dataIndex;
+          const ro=S.sans[i], mod=S.mod[i], tot=ro+mod;
+          return `RO: ${fmt(ro)}/j • Moduvéo: ${fmt(mod)}/j • Total: ${fmt(tot)}/j`;
+        }}}}
+      }
+    });
+  }
+
+  const __simulateOrig = window.simulate;
+  window.simulate = function(){
+    __simulateOrig.apply(this, arguments);
+    const btn = document.getElementById('btnViewDays');
+    const sliderBox = document.getElementById('daysControls');
+    if (btn){ btn.textContent = viewByDays ? '🗓 Mois' : '🗓 Jours'; }
+    if (sliderBox){ sliderBox.style.display = viewByDays ? 'block' : 'none'; }
+    if (viewByDays){
+      const ctx = buildCtxFromInputs();
+      drawDailyChart(ctx);
+    }
+  };
+
+  function bindDaysUI(){
+    const btn = document.getElementById('btnViewDays');
+    const rangeEl = document.getElementById('daysWindow');
+    if (btn){
+      btn.addEventListener('click', ()=>{
+        viewByDays = !viewByDays;
+        window.simulate();
+      });
+    }
+    if (rangeEl){
+      rangeEl.addEventListener('input', ()=>{
+        if (viewByDays){
+          const valEl = document.getElementById('daysWindowVal');
+          if (valEl) valEl.textContent = rangeEl.value;
+          window.simulate();
+        }
+      });
+    }
+    const sliderBox = document.getElementById('daysControls');
+    if (sliderBox){ sliderBox.style.display = viewByDays ? 'block' : 'none'; }
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', ()=>{ bindDaysUI(); window.simulate(); });
+  } else {
+    bindDaysUI(); window.simulate();
+  }
+})(); 
