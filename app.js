@@ -464,7 +464,7 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
   } else { setBar(barCpam,0,0,''); setBar(barCaisse,0,0,''); }
 
   // Correction 3: Gérer la durée et l'affichage de Moduvéo
-  const ijModFinal = ctx.mod.auto ? Math.max(0, ctx.cibleJ - meta.ijro) : Math.max(0, ctx.mod.custom||0);
+  ijModFinal = ctx.mod.auto ? Math.max(0, ctx.cibleJ - meta.ijro) : Math.max(0, ctx.mod.custom||0);
   const modDur = Math.max(0, (ctx.mod.max_j || 1095) - (ctx.mod.franchise || 0));
   setBar(barFranch, 0, modEnabled ? ctx.mod.franchise : 0, (modEnabled && ctx.mod.franchise>0) ? `Franchise ${ctx.mod.franchise} j` : '');
   setBar(barMod, modEnabled ? ctx.mod.franchise : 0, modEnabled ? ctx.mod.max_j : 0, modEnabled ? `J${ctx.mod.franchise}→J${ctx.mod.max_j} • ~${F2.format(ijModFinal)}/j` : '');
