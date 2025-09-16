@@ -1,3 +1,4 @@
+
 /* ---------- Caisses helpers ---------- */
 const same_0_eur = {
   maladie:{ ro_kind:"pl_caisse", cpam:{carence_j:3, max_j:90, f:"cpam_1_730e"}, caisse:{start_j:91, kind:"fixed", ij_j:0, max_j:1095} },
@@ -292,8 +293,11 @@ function simulate(){
   // Annual reference income
   let annualRef = salaireM * 12;
   let microNote = '';
-  const isPLmicroEligible = (profId === 'lib_nr');
-  if (isMicro && (profId.startsWith('ssi_') || isPLmicroEligible)){
+  // Micro éligible : SSI + toutes les professions libérales (lib_*) sauf liste noire
+  const libBlacklist = ['lib_cprn','cnbf_avocat']; // notaire, avocat
+  const eligibleMicro = (profId.startsWith('ssi_') || profId.startsWith('lib_')) && !libBlacklist.includes(profId);
+
+  if (isMicro && eligibleMicro){
     const ca = parseEuro(I.microCA?.value)||0;
     const coef = (I.microAct?.value==='bic_vente') ? 0.29 : (I.microAct?.value==='bic_services') ? 0.50 : 0.66;
     const retenu = ca * coef;
@@ -334,6 +338,10 @@ function simulate(){
     if(r.warn) anyWarn=true;
   }
 
+  // Affichage/mode micro : montrer ou cacher le bloc en fonction de l'éligibilité
+  if (I.microEntrepriseBlock) I.microEntrepriseBlock.style.display = eligibleMicro ? 'flex' : 'none';
+  const hb = $('microHelp'); if (hb) hb.style.display = eligibleMicro ? 'inline-flex' : 'none';
+
   const charges = new Array(M).fill(chargesM), cible = new Array(M).fill(cibleM);
   const A1=Math.min(12,M), mean=a=>a.slice(0,A1).reduce((x,t)=>x+t,0)/A1, kAvec=mean(avec), kSans=mean(sans), kReste=kAvec-chargesM, kManqueSans=Math.max(0, chargesM-kSans);
   if($('vA1Avec')) $('vA1Avec').textContent=F0.format(kAvec)+'/mois'; 
@@ -351,9 +359,6 @@ function simulate(){
   if($('bCible')) $('bCible').textContent=`Salaire cible : ${F0.format(cibleM)}/mois`;
   if(I.warn) I.warn.classList.toggle('show', !!anyWarn);
   if($('modHint')) $('modHint').textContent = modAuto ? `Suggestion automatique ≈ ${F2.format(Math.max(0, cibleJ - ijro))}/j` : `Montant manuel Moduvéo: ${F2.format(ijModCustom)}/j`;
-  if(I.microEntrepriseBlock) const _libBlacklist=['lib_cprn','cnbf_avocat'];
-  const _eligibleMicro=(profId.startsWith('ssi_') || profId.startsWith('lib_')) && !_libBlacklist.includes(profId);
-  I.microEntrepriseBlock.style.display = _eligibleMicro ? 'flex' : 'none';
 
   drawChart({months:M, cpam, caissePro, mod: modSeries, charges, cible, sans, avec});
 
@@ -378,7 +383,6 @@ function renderPave(ctx, meta){
    'tagEndRO','tagDebutMod','tlRuler','tlCursor','tlPanelBody','labelCaisse','tlSummary']
   .forEach(id=>{ if(!$(id)) console.warn('❌ id manquant :', id); });
 
-  // normalized context
   const profId     = (ctx && ctx.profId) ? ctx.profId : (I.profession?.value || '');
   const annualRef  = (ctx && typeof ctx.annualRef !== 'undefined') ? Number(ctx.annualRef) : Number((parseEuro($('salaireM')?.value)||0)*12);
   const isMicro    = !!(ctx && ctx.isMicro);
@@ -398,7 +402,6 @@ function renderPave(ctx, meta){
   const extra=Math.max(0, parseInt($('carenceCreation')?.value)||0);
   const affOK = !(I.affiliationCheck && I.affiliationCheck.checked);
 
-  // Met à jour le libellé de la voie caisse pro avec le vrai nom
   const caisseName = prof.label.match(/\((.*?)\)/)?.[1] || 'Caisse pro';
   const labelCaisse = $('labelCaisse'); if (labelCaisse) labelCaisse.textContent = `RO — ${caisseName}`;
 
@@ -444,7 +447,7 @@ function renderPave(ctx, meta){
   else { setBar(barCarence, extra, carence, carence>extra?`Carence RO J${extra+1}→J${carence}`:''); }
 
   if(affOK){
-    setBar(barCpam, cpamS, cpamE, (cpamE>cpamS)?`J${cpamS+1}→J${cpamE} • ~${F2.format(cpamIJ)}/j`:'');
+    setBar(barCpam, cpamS, cpamE, (cpamE>cpamS)?`J${cpamS+1}→J${cpamE} • ~${F2.format(cpamIJ)}/j`:''); 
     setBar(barCaisse, caisseS, caisseE, (caisseE>caisseS && caisseIJ>0)?`J${caisseS}→J${caisseE} • ~${F2.format(caisseIJ)}/j`:(caisseE>caisseS?`J${caisseS}→J${caisseE} • 0 €/j`:'')); 
   } else { setBar(barCpam,0,0,''); setBar(barCaisse,0,0,''); }
 
@@ -460,7 +463,7 @@ function renderPave(ctx, meta){
     const marks=[0,30,90,180,365,730,1095, zoomMax].filter((v,i,a)=> i===0 || (v>a[i-1] && v<=zoomMax));
     for(const d of marks){
       const tick=document.createElement('div');
-      tick.className='tl-tick'+(([0,30,90,180,365,730,1095].includes(d))?' strong':'');
+      tick.className='tl-tick'+(([0,30,90,180,365,730,1095].includes(d))?' strong':''); 
       tick.style.left=px(d)+'px';
       const lab=document.createElement('strong'); lab.textContent='J'+d;
       tick.appendChild(lab); ruler.appendChild(tick);
@@ -552,7 +555,8 @@ function bindUI(){
     const hb = document.getElementById('microHelp');
     if (hb) hb.style.display = eligible ? 'inline-flex' : 'none';
   };
-// initial toggle
+
+  // initial toggle
   toggleMicroUI();
 
   ['microEntrepriseCheck','microAct','microCA','profession'].forEach(id=>{
@@ -564,6 +568,35 @@ function bindUI(){
   const updateCible=()=>{ if ($('cibleSame')?.checked){ if($('cibleM')) $('cibleM').value=$('salaireM')?.value||''; if($('cibleM')) $('cibleM').disabled=true; } else { if($('cibleM')) $('cibleM').disabled=false; } simulate(); };
   if($('cibleSame')) $('cibleSame').addEventListener('change', updateCible);
   if($('salaireM')) $('salaireM').addEventListener('input', updateCible);
+
+  // --- Help tooltip (micro-entreprise)
+  const helpBtn = $('microHelp');
+  const helpBubbleId = 'microHelpBubble';
+  if (helpBtn) {
+    helpBtn.addEventListener('click', (e) => {
+      const open = !helpBtn.classList.contains('open');
+      helpBtn.classList.toggle('open', open);
+      helpBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    // close when click outside
+    document.addEventListener('click', (e) => {
+      if (!helpBtn.classList.contains('open')) return;
+      const b = document.getElementById(helpBubbleId);
+      if (!b) return;
+      if (!helpBtn.contains(e.target) && !b.contains(e.target)) {
+        helpBtn.classList.remove('open');
+        helpBtn.setAttribute('aria-expanded','false');
+      }
+    });
+    // Esc to close
+    helpBtn.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        helpBtn.classList.remove('open');
+        helpBtn.setAttribute('aria-expanded','false');
+        helpBtn.blur();
+      }
+    });
+  }
 }
 
 /* ---------- Bootstrap ---------- */
@@ -594,14 +627,11 @@ function bindUI(){
 
   bindUI();
 
-  // État initial des champs liés à "Utiliser le salaire net"
   if ($('cibleSame')?.checked && $('cibleM')) { $('cibleM').disabled = true; }
 
-  // Premier rendu
   simulate();
-  // Ajuste l'UI micro après premier rendu
+
   (function(){ const e=new Event('change'); if ($('profession')) $('profession').dispatchEvent(e); if ($('microEntrepriseCheck')) $('microEntrepriseCheck').dispatchEvent(e); })();
 
-  // Responsive
   window.addEventListener('resize', simulate);
 })();
