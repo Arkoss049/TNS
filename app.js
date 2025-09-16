@@ -125,6 +125,7 @@ const I={
   warn:$('warn'), modHint:$('modHint')
 };
 let viewByYear=false, chartInstance=null;
+let viewByDays=false;
 let zoomMode='full', daltonien=false;
 
 const STORAGE_KEY='simu_tns_v2.5';
@@ -136,7 +137,7 @@ function saveState(){ try{ const s={ profession:I.profession?.value, scenario:I.
 function ijFromFormula(name, annualRef, isMicro=false){
   const f=CATALOG.formulas[name];
   if(!f) return 0;
-  if (name==='ssi_1_730e' && isMicro && annualRef<4710) return 0; // <10% PASS
+  if (name==='ssi_1_730e' && isMicro && annualRef<4710) return 0; // <10% PASS pour SSI micro
   let ij=(annualRef||0)/730;
   let min=f.min_j;
   if(name==='ssi_1_730e' && isMicro){ min=0; }
@@ -229,7 +230,7 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
   return { roM:0, roIJj:0, carence:0, max:0, warn:true, cpamM:0, caisseProM:0 };
 }
 
-/* ---------- Chart ---------- */
+/* ---------- Chart (mois/année) ---------- */
 function aggregateYearly(series, months){ const years=Math.ceil(months/12); const out=new Array(years).fill(0); for(let y=0;y<years;y++){ const s=y*12, e=Math.min((y+1)*12, months); const slice=series.slice(s,e); out[y]=slice.length? slice.reduce((a,b)=>a+b,0)/slice.length : 0; } return out; }
 
 function drawChart({months, cpam, caissePro, mod, charges, cible, sans, avec}){
@@ -268,6 +269,106 @@ function drawChart({months, cpam, caissePro, mod, charges, cible, sans, avec}){
   });
 }
 
+/* ---------- Daily View ---------- */
+function buildDailySeries(ctx, maxDays=120){
+  const prof = CATALOG.profs.find(p=>p.id===ctx.profId);
+  if(!prof) return null;
+  const roCfg = prof.ro[ctx.scen];
+  const extra = Math.max(0, parseInt(ctx.carenceCreation)||0);
+
+  // bornes CPAM / caisse
+  let cpamS=0, cpamE=0, caisseS=Infinity, caisseE=-Infinity, cpamIJ=0, caisseIJ=0;
+  if (roCfg.ro_kind==='pl_caisse'){
+    cpamS=(roCfg.cpam?.carence_j ?? 3)+extra;
+    cpamE=(roCfg.cpam?.max_j ?? 90)+extra;
+    cpamIJ=ijFromFormula(roCfg.cpam?.f || 'cpam_1_730e', ctx.annualRef, ctx.isMicro);
+    const c=roCfg.caisse||{};
+    if (Object.keys(c).length){
+      caisseS=(c.start_j||91)+extra;
+      caisseE=(c.max_j||1095)+extra;
+      if (c.kind==='fixed'){ caisseIJ=c.ij_j ?? 0; }
+      else if (c.kind==='piecewise'){
+        let found=null; for (const b of c.bands){ if(ctx.annualRef<=b.rev_max){ found=b; break; } }
+        caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, ctx.annualRef, ctx.isMicro)) : 0;
+      }
+    }
+  } else {
+    cpamS=(roCfg.carence_j||0)+extra;
+    cpamE=(roCfg.max_j||0)+extra;
+    cpamIJ = roCfg.ij_j ?? ijFromFormula(roCfg.f, ctx.annualRef, ctx.isMicro);
+  }
+
+  const res={labels:[], cpam:[], caisse:[], mod:[], sans:[], avec:[], charges:[], cible:[]};
+  const J = Math.min(maxDays, Math.max(cpamE, caisseE, ctx.mod?.max_j||0));
+
+  for(let d=0; d<=J; d++){
+    // RO au jour d
+    let ro=0, cp=0, cs=0;
+    if(ctx.isAffiliationOK && d>=ctx.carence){
+      if(d>=cpamS && d<=cpamE){ ro+=cpamIJ; cp=cpamIJ; }
+      else if(d>=caisseS && d<=caisseE){ ro+=caisseIJ; cs=caisseIJ; }
+    }
+
+    // Moduvéo au jour d
+    let mod=0;
+    if(ctx.mod?.enabled && d>=ctx.mod.franchise && d<=ctx.mod.max_j){
+      const roIJduJour = cp ? cpamIJ : (cs ? caisseIJ : 0);
+      const auto = Math.max(0, ctx.cibleJ - roIJduJour);
+      const wanted = ctx.mod.auto ? auto : Math.max(0, ctx.mod.custom||0);
+      mod = (ctx.mod.plafond>0) ? Math.min(wanted, ctx.mod.plafond) : wanted;
+    }
+
+    res.labels.push('J'+d);
+    res.cpam.push(cp);
+    res.caisse.push(cs);
+    res.mod.push(mod);
+    res.sans.push(ro);
+    res.avec.push(ro+mod);
+    res.charges.push((ctx.chargesM||0)/30);
+    res.cible.push((ctx.cibleM||0)/30);
+  }
+  return res;
+}
+
+function drawDailyChart(ctx){
+  const slider = document.getElementById('daysWindow');
+  const maxDays = parseInt(slider?.value || '120');
+  const S = buildDailySeries(ctx, maxDays);
+  if(!S) return;
+
+  if(chartInstance){ chartInstance.destroy(); chartInstance=null; }
+  const c = $('chart').getContext('2d');
+  const maxV = Math.max(0, ...S.avec, ...S.cible)*1.25;
+  chartInstance = new Chart(c,{
+    type:'bar',
+    data:{
+      labels:S.labels,
+      datasets:[
+        {label:'RO (CPAM)',  data:S.cpam,  stack:'rev', borderWidth:0, backgroundColor:'#6ae3ff'},
+        {label:'RO (Caisse)',data:S.caisse,stack:'rev', borderWidth:0, backgroundColor:'#449fbe'},
+        {label:'Moduvéo PRO',data:S.mod,   stack:'rev', borderWidth:0, backgroundColor:'#80f2a1'},
+        {label:'Charges /j', data:S.charges, type:'line', yAxisID:'y1', borderDash:[6,6], pointRadius:0, tension:0},
+        {label:'Cible /j',   data:S.cible,   type:'line', yAxisID:'y1', pointRadius:0, tension:0.2}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+      scales:{
+        x:{stacked:true, ticks:{maxRotation:0, autoSkip:true}},
+        y:{stacked:true, min:0, max:Math.ceil(maxV/10)*10, ticks:{callback:v=>F2.format(v)}},
+        y1:{stacked:false, min:0, max:Math.ceil(maxV/10)*10, ticks:{display:false}, grid:{drawOnChartArea:false}}
+      },
+      plugins:{
+        tooltip:{ callbacks:{ footer:(items)=>{
+          const i=items[0].dataIndex;
+          const ro=S.sans[i], mod=S.mod[i], tot=ro+mod;
+          return `RO: ${F2.format(ro)}/j • Moduvéo: ${F2.format(mod)}/j • Total: ${F2.format(tot)}/j`;
+        }} }
+      }
+    }
+  });
+}
+
 /* ---------- Simulation (définie AVANT bindUI) ---------- */
 function simulate(){
   if (!I.salaireM?.value || !I.chargesM?.value){
@@ -293,11 +394,13 @@ function simulate(){
   // Annual reference income
   let annualRef = salaireM * 12;
   let microNote = '';
-  // Micro éligible : SSI + toutes les professions libérales (lib_*) sauf liste noire
-  const libBlacklist = ['lib_cprn','cnbf_avocat']; // notaire, avocat
-  const eligibleMicro = (profId.startsWith('ssi_') || profId.startsWith('lib_')) && !libBlacklist.includes(profId);
+  // Micro éligible : SSI + PL non règlementée + CIPAV ; blacklist hors CIPAV
+  const NOT_ELIGIBLE_LIB = ['lib_carmf','lib_carpimko','lib_carcdsf_dent','lib_cavec','lib_cavp','lib_carpv','lib_cavamac','lib_cavom','lib_cprn','cnbf_avocat'];
+  const eligibleMicro = profId.startsWith('ssi_') || profId==='lib_nr' || profId==='lib_cipav';
+  const reallyEligible = eligibleMicro && !NOT_ELIGIBLE_LIB.includes(profId);
 
-  if (isMicro && eligibleMicro){
+  if (isMicro && reallyEligible){
+    // micro-BIC/BNC : conversion CA -> revenu retenu
     const ca = parseEuro(I.microCA?.value)||0;
     const coef = (I.microAct?.value==='bic_vente') ? 0.29 : (I.microAct?.value==='bic_services') ? 0.50 : 0.66;
     const retenu = ca * coef;
@@ -313,7 +416,8 @@ function simulate(){
     profId, scen, salaireM, chargesM, cibleM, cibleJ,
     carenceCreation, isAffiliationOK, isMicro,
     mod:{ franchise:franchiseMod, plafond:plaf, max_j:1095, auto:modAuto, custom:ijModCustom, enabled:modEnabled },
-    horizonM, annualRef
+    horizonM, annualRef,
+    carence: 3 // valeur par défaut pour daily builder
   };
 
   // Séries mensuelles
@@ -339,8 +443,8 @@ function simulate(){
   }
 
   // Affichage/mode micro : montrer ou cacher le bloc en fonction de l'éligibilité
-  if (I.microEntrepriseBlock) I.microEntrepriseBlock.style.display = eligibleMicro ? 'flex' : 'none';
-  const hb = $('microHelp'); if (hb) hb.style.display = eligibleMicro ? 'inline-flex' : 'none';
+  if (I.microEntrepriseBlock) I.microEntrepriseBlock.style.display = reallyEligible ? 'flex' : 'none';
+  const hb = $('microHelp'); if (hb) hb.style.display = reallyEligible ? 'inline-flex' : 'none';
 
   const charges = new Array(M).fill(chargesM), cible = new Array(M).fill(cibleM);
   const A1=Math.min(12,M), mean=a=>a.slice(0,A1).reduce((x,t)=>x+t,0)/A1, kAvec=mean(avec), kSans=mean(sans), kReste=kAvec-chargesM, kManqueSans=Math.max(0, chargesM-kSans);
@@ -360,7 +464,10 @@ function simulate(){
   if(I.warn) I.warn.classList.toggle('show', !!anyWarn);
   if($('modHint')) $('modHint').textContent = modAuto ? `Suggestion automatique ≈ ${F2.format(Math.max(0, cibleJ - ijro))}/j` : `Montant manuel Moduvéo: ${F2.format(ijModCustom)}/j`;
 
-  drawChart({months:M, cpam, caissePro, mod: modSeries, charges, cible, sans, avec});
+  // Graph selon la vue
+  const ctx2 = {...ctx, chargesM, cibleM, carence};
+  if(viewByDays){ drawDailyChart(ctx2); }
+  else { drawChart({months:M, cpam, caissePro, mod: modSeries, charges, cible, sans, avec}); }
 
   const roCfg=selectedProf.ro[scen];
   const caisseName = selectedProf.label.match(/\((.*?)\)/)?.[1] || 'Caisse pro';
@@ -372,7 +479,7 @@ function simulate(){
   }
   if($('paveMetier')) $('paveMetier').textContent=`${selectedProf.label} — scénario ${scen} • ${sous}`;
 
-  renderPave(ctx, {carence, max, ijro});
+  renderPave(ctx2, {carence, max, ijro});
   saveState();
 }
 
@@ -495,6 +602,7 @@ function renderPave(ctx, meta){
     }
   }
 
+  const root=$('timeline2');
   if(root){
     root.onmousemove=(ev)=>{
       const r=root.getBoundingClientRect();
@@ -537,9 +645,9 @@ function bindUI(){
 
   const toggleMicroUI = () => {
     const prof = I.profession?.value || '';
-    // Micro éligible : SSI + toutes les professions libérales (lib_*) sauf liste noire
-    const notEligibleLib = ['lib_cprn','cnbf_avocat']; // Notaire, Avocat
-    const eligible = (prof.startsWith('ssi_') || prof.startsWith('lib_')) && !notEligibleLib.includes(prof);
+    // Éligible micro dans l'UI : SSI + libérale non réglementée + CIPAV ; exceptions blacklist
+    const NOT_ELIGIBLE_LIB = ['lib_carmf','lib_carpimko','lib_carcdsf_dent','lib_cavec','lib_cavp','lib_carpv','lib_cavamac','lib_cavom','lib_cprn','cnbf_avocat'];
+    const eligible = (prof.startsWith('ssi_') || prof==='lib_nr' || prof==='lib_cipav') && !NOT_ELIGIBLE_LIB.includes(prof);
 
     if (I.microEntrepriseBlock) I.microEntrepriseBlock.style.display = 'block';
     if (I.microEntrepriseCheck){
@@ -596,6 +704,21 @@ function bindUI(){
         helpBtn.blur();
       }
     });
+  }
+
+  // --- Vue Jours ---
+  const btnDays = $('btnViewDays'), slider = $('daysWindow');
+  const daysControls = $('daysControls'), daysVal = $('daysWindowVal');
+  if (btnDays){
+    btnDays.addEventListener('click', ()=>{
+      viewByDays = !viewByDays;
+      btnDays.textContent = viewByDays ? '🗓 Mois' : '🗓 Jours';
+      if (daysControls) daysControls.style.display = viewByDays ? 'block' : 'none';
+      simulate();
+    });
+  }
+  if (slider){
+    slider.addEventListener('input', ()=>{ if (daysVal) daysVal.textContent = slider.value; if (viewByDays) simulate(); });
   }
 }
 
