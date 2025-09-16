@@ -123,10 +123,22 @@
           <input id="horizon" inputmode="numeric" value="60"/>
         </div>
         <div>
-          <label>Vue</label>
-          <button id="btnView" class="btn" style="width:100%">🗓 Mois</button>
-        </div>
-      </div>
+          <div>
+  <label>Vue</label>
+  <div class="btn-group" style="display:flex; gap:8px">
+    <button id="btnView" class="btn" style="flex:1">🗓 Mois</button>
+    <button id="btnViewDays" class="btn" style="flex:1">🗓 Jours</button>
+  </div>
+
+  <!-- Contrôles spécifiques à la vue Jours (cachés par défaut) -->
+  <div id="daysControls" style="display:none; margin-top:8px">
+    <input id="daysWindow" type="range" min="60" max="365" step="30" value="120" style="width:100%">
+    <div class="small" style="opacity:.8">
+      Fenêtre: <span id="daysWindowVal">120</span> jours
+    </div>
+  </div>
+</div>
+
 
       <div id="warn" class="warnBanner">⚠️ Donnée RO manquante pour cette caisse/scénario.</div>
     </div>
