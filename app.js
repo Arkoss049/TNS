@@ -312,7 +312,7 @@ const profId=I.profession.value, scen=I.scenario.value;
 
   for(let m=0;m<M;m++){
     const f = (function flowMonth(m){
-      const r=computeROMonth(m, profId, scen, annualRef, carenceCreation, isAffiliationOK, isMicro);
+      const r=computeROMonth(m, profId, scen, ctx.annualRef, carenceCreation, isAffiliationOK, isMicro);
       let ijModj=modAuto ? Math.max(0, (cibleJ - r.roIJj)) : Math.max(0, ijModCustom);
       if(plaf>0) ijModj=Math.min(ijModj, plaf);
       if(!modEnabled) ijModj=0;
@@ -463,8 +463,9 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
     setBar(barCaisse, caisseS, caisseE, (caisseE>caisseS && caisseIJ>0)?`J${caisseS}→J${caisseE} • ~${F2.format(caisseIJ)}/j`:(caisseE>caisseS?`J${caisseS}→J${caisseE} • 0 €/j`:'')); 
   } else { setBar(barCpam,0,0,''); setBar(barCaisse,0,0,''); }
 
-  const ijModEst = ctx.mod.auto ? Math.max(0, ctx.cibleJ - meta.ijro) : Math.max(0, ctx.mod.custom||0);
-  const ijModFinal = ctx.mod.plafond>0 ? Math.min(ijModEst, ctx.mod.plafond) : ijModEst;
+  // Correction 3: Gérer la durée et l'affichage de Moduvéo
+  const ijModFinal = ctx.mod.auto ? Math.max(0, ctx.cibleJ - meta.ijro) : Math.max(0, ctx.mod.custom||0);
+  const modDur = Math.max(0, (ctx.mod.max_j || 1095) - (ctx.mod.franchise || 0));
   setBar(barFranch, 0, modEnabled ? ctx.mod.franchise : 0, (modEnabled && ctx.mod.franchise>0) ? `Franchise ${ctx.mod.franchise} j` : '');
   setBar(barMod, modEnabled ? ctx.mod.franchise : 0, modEnabled ? ctx.mod.max_j : 0, modEnabled ? `J${ctx.mod.franchise}→J${ctx.mod.max_j} • ~${F2.format(ijModFinal)}/j` : '');
 
@@ -502,10 +503,10 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
   root.onmouseleave=()=>{ tip.style.display='none'; };
 
   const sum=$('tlSummary'); const cpamDur=Math.max(0, cpamE-cpamS), caisseDur=Math.max(0, caisseE-caisseS);
-  // Correction ici
-  const modDur = Math.max(0, (ctx.mod.max_j || 1095) - (ctx.mod.franchise || 0));
-  const ijModFinal = ctx.mod.auto ? Math.max(0, ctx.cibleJ - meta.ijro) : Math.max(0, ctx.mod.custom||0);
-  const chips=[]; if(cpamDur>0) chips.push(`CPAM ${cpamDur} j • ${F2.format(cpamIJ)}/j`); if(caisseE>caisseS) chips.push(`${caisseName} ${caisseDur} j • ${F2.format(caisseIJ)}/j`); chips.push(`Moduvéo ${modDur} j • ${F2.format(ijModFinal)}/j`);
+  const ijModFinalSummary = ctx.mod.auto ? Math.max(0, ctx.cibleJ - meta.ijro) : Math.max(0, ctx.mod.custom||0);
+  const modDurSummary = Math.max(0, (ctx.mod.max_j || 1095) - (ctx.mod.franchise || 0));
+  
+  const chips=[]; if(cpamDur>0) chips.push(`CPAM ${cpamDur} j • ${F2.format(cpamIJ)}/j`); if(caisseE>caisseS) chips.push(`${caisseName} ${caisseDur} j • ${F2.format(caisseIJ)}/j`); chips.push(`Moduvéo ${modDurSummary} j • ${F2.format(ijModFinalSummary)}/j`);
   sum.innerHTML=chips.map(c=>`<span class="chip">${c}</span>`).join('');
 }
 
