@@ -63,7 +63,31 @@
           <input id="carenceCreation" inputmode="numeric" value="0"/>
           <div class="hint">Ex : SSI maladie : droits après 1 an d’affiliation ⇒ saisir ~365 j.</div>
         </div>
-        <div class="card" style="margin-top:6px; display:none" id="micro-entreprise-block">  <div class="flex" style="align-items:center; gap:12px; flex-wrap:wrap">    <label style="margin:0"><input type="checkbox" id="microEntrepriseCheck" /> Micro‑entreprise</label>    <select id="microAct" disabled>      <option value="bic_vente">BIC vente</option>      <option value="bic_services">BIC services</option>      <option value="bnc_liberal">BNC libéral</option>    </select>    <input id="microCA" inputmode="decimal" placeholder="Chiffre d’affaires (€/an)" disabled />    <span id="microSummary" class="small" style="opacity:.9"></span>  </div>  <div class="hint" style="margin-top:6px">Conversion automatique : CA × coef. forfait (BIC vente 0,29 • BIC services 0,50 • BNC libéral 0,66).<br/>Seuil réglementaire : revenu retenu &lt; 4 710 € ⇒ IJ SSI = 0 €.</div></div>
+<div class="card" style="margin-top:6px; display:none" id="micro-entreprise-block">
+  <div class="flex" style="align-items:center; gap:12px; flex-wrap:wrap">
+    <label style="margin:0">
+      <input type="checkbox" id="microEntrepriseCheck" /> Micro-entreprise
+    </label>
+
+    <button type="button" class="help" id="microHelp" aria-expanded="false" aria-controls="microHelpBubble" title="Informations micro-entreprise">?</button>
+    <div class="help-bubble" id="microHelpBubble" role="dialog" aria-label="Aide micro-entreprise">
+      <div><b>Conversion automatique</b> : CA × coef. forfait</div>
+      <div>• BIC vente <b>0,29</b> • BIC services <b>0,50</b> • BNC libéral <b>0,66</b></div>
+      <hr>
+      <div><b>Seuil réglementaire</b> : si <i>revenu retenu</i> &lt; <b>4 710 €</b> ⇒ <b>IJ SSI = 0 €</b>.</div>
+    </div>
+
+    <select id="microAct" disabled>
+      <option value="bic_vente">BIC vente</option>
+      <option value="bic_services">BIC services</option>
+      <option value="bnc_liberal">BNC libéral</option>
+    </select>
+
+    <input id="microCA" inputmode="decimal" placeholder="Chiffre d’affaires (€/an)" disabled />
+    <span id="microSummary" class="small" style="opacity:.9"></span>
+  </div>
+</div>
+
       </div>
       <div class="flex" style="margin-top:6px">
         <label><input type="checkbox" id="affiliation-check"/> Affiliation < 12 mois</label>
