@@ -351,7 +351,9 @@ function simulate(){
   if($('bCible')) $('bCible').textContent=`Salaire cible : ${F0.format(cibleM)}/mois`;
   if(I.warn) I.warn.classList.toggle('show', !!anyWarn);
   if($('modHint')) $('modHint').textContent = modAuto ? `Suggestion automatique ≈ ${F2.format(Math.max(0, cibleJ - ijro))}/j` : `Montant manuel Moduvéo: ${F2.format(ijModCustom)}/j`;
-  if(I.microEntrepriseBlock) I.microEntrepriseBlock.style.display = (profId.includes('ssi') || profId==='lib_nr') ? 'flex' : 'none';
+  if(I.microEntrepriseBlock) const _libBlacklist=['lib_cprn','cnbf_avocat'];
+  const _eligibleMicro=(profId.startsWith('ssi_') || profId.startsWith('lib_')) && !_libBlacklist.includes(profId);
+  I.microEntrepriseBlock.style.display = _eligibleMicro ? 'flex' : 'none';
 
   drawChart({months:M, cpam, caissePro, mod: modSeries, charges, cible, sans, avec});
 
@@ -532,7 +534,10 @@ function bindUI(){
 
   const toggleMicroUI = () => {
     const prof = I.profession?.value || '';
-    const eligible = prof.startsWith('ssi_') || (prof === 'lib_nr');
+    // Micro éligible : SSI + toutes les professions libérales (lib_*) sauf liste noire
+    const notEligibleLib = ['lib_cprn','cnbf_avocat']; // Notaire, Avocat
+    const eligible = (prof.startsWith('ssi_') || prof.startsWith('lib_')) && !notEligibleLib.includes(prof);
+
     if (I.microEntrepriseBlock) I.microEntrepriseBlock.style.display = 'block';
     if (I.microEntrepriseCheck){
       I.microEntrepriseCheck.disabled = !eligible;
@@ -542,9 +547,12 @@ function bindUI(){
     if (I.microAct) I.microAct.disabled = !on;
     if (I.microCA)  I.microCA.disabled  = !on;
     if (!on && I.microSummary) I.microSummary.textContent = eligible ? '' : 'Profil non éligible au micro-entreprise';
-  };
 
-  // initial toggle
+    // bouton d'aide "?" visible uniquement si éligible
+    const hb = document.getElementById('microHelp');
+    if (hb) hb.style.display = eligible ? 'inline-flex' : 'none';
+  };
+// initial toggle
   toggleMicroUI();
 
   ['microEntrepriseCheck','microAct','microCA','profession'].forEach(id=>{
