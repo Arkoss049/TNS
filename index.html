@@ -1,145 +1,205 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Simulateur TNS — Régime obligatoire + Moduvéo PRO</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Simulateur TNS — Régime obligatoire + Moduvéo PRO</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="wrap">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
-      <div>
-        <h1>Régime obligatoire + Moduvéo PRO = Salaire reconstitué</h1>
-        <div class="hint">Sélectionne la <b>profession / caisse</b> • calcule automatiquement les <b>IJ RO</b> • Moduvéo complète pour atteindre le <b>salaire cible</b>.</div>
-      </div>
-      <div class="toolbar">
-        <button id="btnSave" class="btn">💾 Sauver</button>
-        <button id="btnReset" class="btn ghost">♻️ Réinit</button>
-        <button id="btnPNG" class="btn">🖼 PNG</button>
-      </div>
+<div class="wrap">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+    <div>
+      <h1>Régime obligatoire + Moduvéo PRO = Salaire reconstitué</h1>
+      <div class="hint">Sélectionne la <b>profession / caisse</b> • calcule automatiquement les <b>IJ RO</b> • Moduvéo complète pour atteindre le <b>salaire cible</b>.</div>
     </div>
-
-    <div class="grid cols">
-      <div class="card col-4">
-        <h2>1) Paramètres RDV</h2>
-        <label>Profession / Caisse</label>
-        <select id="profession">
-          <option value="lib_nr">Profession libérale non réglementée (URSSAF)</option>
-        </select>
-
-        <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px">
-          <div>
-            <label>Salaire net mensuel (€/mois)</label>
-            <input id="salaireM" inputmode="decimal" placeholder="ex: 3000"/>
-          </div>
-          <div>
-            <label>Charges fixes (€/mois)</label>
-            <input id="chargesM" inputmode="decimal" placeholder="ex: 2000"/>
-          </div>
-        </div>
-
-        <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:6px">
-          <div>
-            <label>Salaire <u>cible</u> (€/mois)</label>
-            <input id="cibleM" inputmode="decimal" placeholder="= Salaire net"/>
-          </div>
-          <div class="flex" style="align-items:end">
-            <label><input type="checkbox" id="cibleSame" checked/> Utiliser le salaire net</label>
-          </div>
-        </div>
-
-        <label>Scénario</label>
-        <select id="scenario">
-          <option value="maladie">Arrêt (maladie)</option>
-          <option value="atmp">Accident (AT/MP)</option>
-          <option value="autre">Accident de la vie</option>
-        </select>
-
-        <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:6px">
-          <div>
-            <label>Carence <u>création</u> RO (jours)</label>
-            <input id="carenceCreation" inputmode="numeric" value="0"/>
-            <div class="hint">Ex : SSI maladie : droits après 1 an d’affiliation ⇒ saisir ~365 j.</div>
-          </div>
-        </div>
-
-        <div class="flex" style="margin-top:6px">
-          <label><input type="checkbox" id="affiliation-check"/> Affiliation &lt; 12 mois</label>
-        </div>
-
-        <div class="card" style="margin-top:10px">
-          <h3 style="margin:0 0 6px">Contrat Moduvéo PRO</h3>
-          <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px">
-            <div>
-              <label>Franchise Moduvéo (jours)</label>
-              <input id="franchiseMod" inputmode="numeric" value="15"/>
-            </div>
-            <div>
-              <label>Plafond Moduvéo (€/jour) <span class="small">(optionnel)</span></label>
-              <input id="plafondMod" inputmode="decimal" placeholder="ex: 320"/>
-            </div>
-          </div>
-          <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:6px">
-            <div>
-              <label>IJ Moduvéo (€/jour)</label>
-              <input id="ijModCustom" inputmode="decimal" placeholder="auto"/>
-            </div>
-            <div class="flex" style="align-items:end">
-              <label><input type="checkbox" id="modAuto" checked/> Calibrer automatiquement pour combler le salaire cible</label>
-            </div>
-          </div>
-          <div class="hint" id="modHint" style="margin-top:4px"></div>
-        </div>
-
-        <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:8px">
-          <div>
-            <label>Horizon (mois)</label>
-            <input id="horizon" inputmode="numeric" value="60"/>
-          </div>
-          <div>
-            <label>Vue</label>
-            <div class="btn-group" style="display:flex; gap:8px">
-              <button id="btnView" class="btn" style="flex:1">🗓 Mois</button>
-              <button id="btnViewDays" class="btn" style="flex:1">🗓 Jours</button>
-            </div>
-            <div id="daysControls" style="display:none; margin-top:8px">
-              <input id="daysWindow" type="range" min="60" max="365" step="30" value="120" style="width:100%">
-              <div class="small" style="opacity:.8">Fenêtre: <span id="daysWindowVal">120</span> jours</div>
-            </div>
-          </div>
-        </div>
-
-        <div id="warn" class="warnBanner">⚠️ Donnée RO manquante pour cette caisse/scénario.</div>
-      </div>
-
-      <div class="col-8">
-        <div class="kpis">
-          <div class="kpi" id="kA1Avec"><h3>Revenus mensuels <b>avec Moduvéo</b></h3><div class="v" id="vA1Avec">—</div></div>
-          <div class="kpi" id="kA1Reste"><h3>Reste à vivre <b>(après charges)</b></h3><div class="v" id="vA1Reste">—</div></div>
-          <div class="kpi" id="kA1Sans"><h3>Manque mensuel <b>sans contrat</b></h3><div class="v" id="vA1Sans">—</div></div>
-        </div>
-
-        <div class="card" style="margin-top:12px">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
-            <h2>2) Revenus vs Charges</h2>
-            <div class="small">Barres empilées = RO + Moduvéo • Lignes = Charges, <b>Salaire cible</b>, RO seul</div>
-          </div>
-          <canvas id="chart"></canvas>
-        </div>
-
-        <div class="card" style="margin-top:12px; position:relative">
-          <h2>3) Pavé métier (régime de base)</h2>
-          <div id="paveMetier" class="hint" style="margin-bottom:8px"></div>
-          <div class="timeline2" id="timeline2"></div>
-        </div>
-      </div>
+    <div class="toolbar">
+      <button id="btnSave" class="btn">💾 Sauver</button>
+      <button id="btnReset" class="btn ghost">♻️ Réinit</button>
+      <button id="btnPNG" class="btn">🖼 PNG</button>
     </div>
   </div>
 
-  <!-- Scripts -->
-  <script src="app.js"></script>
+  <div class="grid cols">
+    <div class="card col-4">
+      <h2>1) Paramètres RDV</h2>
+      <label>Profession / Caisse</label>
+      <select id="profession">
+        <option value="lib_nr">Profession libérale non réglementée (URSSAF)</option>
+      </select>
+
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px">
+        <div>
+          <label>Salaire net mensuel (€/mois)</label>
+          <input id="salaireM" inputmode="decimal" placeholder="ex: 3000"/>
+        </div>
+        <div>
+          <label>Charges fixes (€/mois)</label>
+          <input id="chargesM" inputmode="decimal" placeholder="ex: 2000"/>
+        </div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:6px">
+        <div>
+          <label>Salaire <u>cible</u> (€/mois)</label>
+          <input id="cibleM" inputmode="decimal" placeholder="= Salaire net"/>
+        </div>
+        <div class="flex" style="align-items:end">
+          <label><input type="checkbox" id="cibleSame" checked/> Utiliser le salaire net</label>
+        </div>
+      </div>
+
+      <label>Scénario</label>
+      <select id="scenario">
+        <option value="maladie">Arrêt (maladie)</option>
+        <option value="atmp">Accident (AT/MP)</option>
+        <option value="autre">Accident de la vie</option>
+      </select>
+
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:6px">
+        <div>
+          <label>Carence <u>création</u> RO (jours)</label>
+          <input id="carenceCreation" inputmode="numeric" value="0"/>
+          <div class="hint">Ex : SSI maladie : droits après 1 an d’affiliation ⇒ saisir ~365 j.</div>
+        </div>
+        <div class="card" style="margin-top:6px; display:none" id="micro-entreprise-block">
+          <div class="flex" style="align-items:center; gap:12px; flex-wrap:wrap">
+            <label style="margin:0">
+              <input type="checkbox" id="microEntrepriseCheck" /> Micro-entreprise
+            </label>
+
+            <button type="button" class="help" id="microHelp" aria-expanded="false" aria-controls="microHelpBubble" title="Informations micro-entreprise">?</button>
+            <div class="help-bubble" id="microHelpBubble" role="dialog" aria-label="Aide micro-entreprise">
+              <div><b>Conversion automatique</b> : CA × coef. forfait</div>
+              <div>• BIC vente <b>0,29</b> • BIC services <b>0,50</b> • BNC libéral <b>0,66</b></div>
+              <hr>
+              <div><b>Seuil réglementaire</b> : si <i>revenu retenu</i> &lt; <b>4 710 €</b> ⇒ <b>IJ SSI = 0 €</b>.</div>
+            </div>
+
+            <select id="microAct" disabled>
+              <option value="bic_vente">BIC vente</option>
+              <option value="bic_services">BIC services</option>
+              <option value="bnc_liberal">BNC libéral</option>
+            </select>
+
+            <input id="microCA" inputmode="decimal" placeholder="Chiffre d’affaires (€/an)" disabled />
+            <span id="microSummary" class="small" style="opacity:.9"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex" style="margin-top:6px">
+        <label><input type="checkbox" id="affiliation-check"/> Affiliation < 12 mois</label>
+      </div>
+
+      <div class="card" style="margin-top:10px">
+        <h3 style="margin:0 0 6px">Contrat Moduvéo PRO</h3>
+        <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px">
+          <div>
+            <label>Franchise Moduvéo (jours)</label>
+            <input id="franchiseMod" inputmode="numeric" value="15"/>
+          </div>
+          <div>
+            <label>Plafond Moduvéo (€/jour) <span class="small">(optionnel)</span></label>
+            <input id="plafondMod" inputmode="decimal" placeholder="ex: 320"/>
+          </div>
+        </div>
+        <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:6px">
+          <div>
+            <label>IJ Moduvéo (€/jour)</label>
+            <input id="ijModCustom" inputmode="decimal" placeholder="auto"/>
+          </div>
+          <div class="flex" style="align-items:end">
+            <label><input type="checkbox" id="modAuto" checked/> Calibrer automatiquement pour combler le salaire cible</label>
+          </div>
+        </div>
+        <div class="hint" id="modHint" style="margin-top:4px"></div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:8px">
+        <div>
+          <label>Horizon (mois)</label>
+          <input id="horizon" inputmode="numeric" value="60"/>
+        </div>
+        <div>
+          <label>Vue</label>
+          <div class="btn-group" style="display:flex; gap:8px">
+            <button id="btnView" class="btn" style="flex:1">🗓 Mois/Année</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="warn" class="warnBanner">⚠️ Donnée RO manquante pour cette caisse/scénario.</div>
+    </div>
+
+    <div class="col-8">
+      <div class="kpis">
+        <div class="kpi" id="kA1Avec"><h3>Revenus mensuels <b>avec Moduvéo</b></h3><div class="v" id="vA1Avec">—</div></div>
+        <div class="kpi" id="kA1Reste"><h3>Reste à vivre <b>(après charges)</b></h3><div class="v" id="vA1Reste">—</div></div>
+        <div class="kpi" id="kA1Sans"><h3>Manque mensuel <b>sans contrat</b></h3><div class="v" id="vA1Sans">—</div></div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+          <h2>2) Revenus vs Charges</h2>
+          <div class="small">Barres empilées = RO + Moduvéo • Lignes = Charges, <b>Salaire cible</b>, RO seul</div>
+        </div>
+        <canvas id="chart"></canvas>
+      </div>
+
+      <div class="card" style="margin-top:12px; position:relative">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <h2>3) Pavé métier (régime de base)</h2>
+          <div class="small">Frise d’indemnisation : carence création / carence RO • CPAM • caisse pro • Moduvéo</div>
+        </div>
+        <div id="paveMetier" class="hint" style="margin-bottom:8px"></div>
+
+        <div class="tl-topbar">
+          <div class="tl-controls">
+            <label class="switch"><input type="radio" name="zoom" value="180" id="zoom180"> Zoom J0→J180</label>
+            <label class="switch"><input type="radio" name="zoom" value="full" id="zoomFull" checked> Vue complète</label>
+            <label class="switch"><input type="checkbox" id="modToggle" checked> Moduvéo ON/OFF</label>
+            <label class="switch"><input type="checkbox" id="daltoToggle"> Mode daltonien</label>
+          </div>
+          <div class="hint">Passe la souris sur la frise pour les détails</div>
+        </div>
+
+        <div class="timeline2" id="timeline2">
+          <div class="tl-lane">
+            <span class="tl-label">Création / Carence RO</span>
+            <div class="tl-bar creation" id="barCreation"></div>
+            <div class="tl-bar carence" id="barCarence"></div>
+          </div>
+          <div class="tl-lane">
+            <span class="tl-label">RO — CPAM</span>
+            <div class="tl-bar cpam" id="barCpam"></div>
+          </div>
+          <div class="tl-lane">
+            <span class="tl-label" id="labelCaisse">RO — Caisse pro</span>
+            <div class="tl-bar caisse" id="barCaisse"></div>
+          </div>
+          <div class="tl-lane">
+            <span class="tl-label">Moduvéo</span>
+            <div class="tl-bar franchise" id="barFranchise"></div>
+            <div class="tl-bar moduv" id="barMod"></div>
+          </div>
+
+          <div class="tl-tag" id="tagEndRO">Fin droits RO</div>
+          <div class="tl-tag" id="tagDebutMod">Début Moduvéo</div>
+          <div class="tl-ruler" id="tlRuler"></div>
+          <div class="tl-cursor" id="tlCursor" style="left:14px"></div>
+
+          <div class="tl-rightpanel"><h4>Pointage</h4><div id="tlPanelBody">Survolez la frise.</div></div>
+        </div>
+
+        <div class="tl-summary" id="tlSummary"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
