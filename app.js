@@ -16,7 +16,7 @@ const CATALOG = {
       ro: {
         maladie:{ ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} },
         atmp:   { ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} },
-        autre: { ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} } 
+        autre:  { ro_kind:'pl_caisse', cpam:{carence_j:3, max_j:90, f:'cpam_1_730e'}, caisse:{} } 
       },
       micro:{ kind:'bnc', coef:0.66 }
     },
@@ -104,7 +104,6 @@ function currentIJjForMonth(m, cpam_c, cpamMax, cpamIJ, caisseStart, caisseIJ){
   return tot? (cpamIJ*dCpam + caisseIJ*dCaisse)/tot : 0; 
 }
 
-
 /* ---------- État & persistance ---------- */
 const I={
   profession:$('profession'), scenario:$('scenario'),
@@ -133,29 +132,32 @@ function loadState(){ try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw)
 function saveState(){ try{ const s={ profession:I.profession?.value, scenario:I.scenario?.value, salaireM:I.salaireM?.value, chargesM:I.chargesM?.value, cibleM:I.cibleM?.value, cibleSame:!!I.cibleSame?.checked, carenceCreation:I.carenceCreation?.value, affiliationCheck:!!I.affiliationCheck?.checked, microEntrepriseCheck:!!I.microEntrepriseCheck?.checked, microAct:I.microAct?.value, microCA:I.microCA?.value, franchiseMod:I.franchiseMod?.value, plafondMod:I.plafondMod?.value, ijModCustom:I.ijModCustom?.value, modAuto:!!I.modAuto?.checked, horizon:I.horizon?.value }; localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){} }
 
 /* ---------- Calculs RO / Mod ---------- */
-function ijFromFormula(name, annualRef, isMicro=false){ const f=CATALOG.formulas[name]; if(!f) return 0; if (name==='ssi_1_730e' && isMicro && annualRef<4710) return 0; let ij=(annualRef||0)/730; let min=f.min_j; if(name==='ssi_1_730e' && isMicro){ min=0; } return clamp(ij, min, f.max_j); }
+function ijFromFormula(name, annualRef, isMicro=false){
+  const f=CATALOG.formulas[name];
+  if(!f) return 0;
+  if (name==='ssi_1_730e' && isMicro && annualRef<4710) return 0; // <10% PASS
+  let ij=(annualRef||0)/730;
+  let min=f.min_j;
+  if(name==='ssi_1_730e' && isMicro){ min=0; }
+  return clamp(ij, min, f.max_j);
+}
+
 function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliationOK, isMicro){
-  const p=CATALOG.profs.find(x=>x.id===prof); const cfg=p?.ro?.[scen]; if(!cfg){ return {roM:0,roIJj:0,carence:0,max:0,warn:true,cpamM:0,caisseProM:0}; }
+  const p=CATALOG.profs.find(x=>x.id===prof);
+  const cfg=p?.ro?.[scen];
+  if(!cfg){ return {roM:0,roIJj:0,carence:0,max:0,warn:true,cpamM:0,caisseProM:0}; }
   
-  // Correction 1: Gérer le cas d'affiliation non OK
+  // Affiliation < 12 mois : pas de droits
   if (!isAffiliationOK){ 
     const baseCar = Number(cfg.carence_j || 0) + Number(carenceCreation || 0);
     const baseMax = Number(cfg.max_j || 0) + Number(carenceCreation || 0);
     const fallbackMax = baseMax > baseCar ? baseMax : (90 + Number(carenceCreation || 0));
-    return {
-      roM: 0,
-      roIJj: 0,
-      carence: baseCar,
-      max: fallbackMax,
-      warn: false,
-      cpamM: 0,
-      caisseProM: 0
-    };
+    return { roM:0, roIJj:0, carence:baseCar, max:fallbackMax, warn:false, cpamM:0, caisseProM:0 };
   }
 
   annualRef = (annualRef||0); 
-  const extra = Math.max(0, parseInt(I.carenceCreation.value)||0); 
-  const roConfig = p.ro[I.scenario.value]; 
+  const extra = Math.max(0, parseInt(carenceCreation)||0); 
+  const roConfig = cfg; 
   const hasCpam = (roConfig.cpam != null);
 
   if(roConfig.ro_kind==='formula'){ 
@@ -207,17 +209,14 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
       } else if(caisse.kind === 'piecewise'){
         let found = null;
         for(const b of caisse.bands){
-          if(annualRef <= b.rev_max){
-            found = b;
-            break;
-          }
+          if(annualRef <= b.rev_max){ found = b; break; }
         }
         caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
       }
     } else {
-        caisseS = cpamMax + 1;
-        caisseE = cpamMax;
-        caisseIJ = 0;
+      caisseS = cpamMax + 1;
+      caisseE = cpamMax;
+      caisseIJ = 0;
     }
     const caisseDays=coveredDays(caisseS, m, caisseE); 
     const caisseM=caisseDays*(caisseIJ||0);
@@ -240,7 +239,8 @@ function drawChart({months, cpam, caissePro, mod, charges, cible, sans, avec}){
   let L=labelsM, CPAM=cpam, CAISSE=caissePro, MOD=mod, CH=charges, CI=cible, SN=sans, AV=avec;
   if(viewByYear){ const Y=Math.ceil(months/12); L=[...Array(Y)].map((_,i)=>`A${i+1}`); const agg=a=>aggregateYearly(a, months); CPAM=agg(cpam); CAISSE=agg(caissePro); MOD=agg(mod); CH=agg(charges); CI=agg(cible); SN=agg(sans); AV=agg(avec); }
   if(chartInstance) chartInstance.destroy();
-  const ctx2=$('chart').getContext('2d');
+  const ctx2=($('chart')||{}).getContext ? $('chart').getContext('2d') : null;
+  if(!ctx2) return;
   const maxV=Math.max(0, ...CPAM, ...CAISSE, ...MOD, ...CH, ...CI, ...SN, ...AV);
   const yMax=Math.max(500, Math.ceil((maxV*1.2)/100)*100);
 
@@ -269,23 +269,26 @@ function drawChart({months, cpam, caissePro, mod, charges, cible, sans, avec}){
 
 /* ---------- Simulation (définie AVANT bindUI) ---------- */
 function simulate(){
-  if (!I.salaireM?.value || !I.chargesM?.value){ I.warn.textContent="⚠️ Veuillez renseigner le salaire net et les charges fixes."; I.warn.classList.add('show'); return; }
-  I.warn.classList.remove('show');
-const profId=I.profession.value, scen=I.scenario.value;
+  if (!I.salaireM?.value || !I.chargesM?.value){
+    if(I.warn){ I.warn.textContent="⚠️ Veuillez renseigner le salaire net et les charges fixes."; I.warn.classList.add('show'); }
+    return;
+  }
+  if(I.warn) I.warn.classList.remove('show');
+
+  const profId=I.profession.value, scen=I.scenario.value;
   const salaireM=parseEuro(I.salaireM.value)||0, chargesM=parseEuro(I.chargesM.value)||0;
-  const cibleM = I.cibleSame.checked ? salaireM : (parseEuro(I.cibleM.value)||0);
+  const cibleM = I.cibleSame?.checked ? salaireM : (parseEuro(I.cibleM.value)||0);
   const cibleJ=cibleM/30;
-  const carenceCreation=Math.max(0, parseInt(I.carenceCreation.value)||0);
+  const carenceCreation=Math.max(0, parseInt(I.carenceCreation?.value)||0);
   const isAffiliationOK = !(I.affiliationCheck && I.affiliationCheck.checked);
   const isMicro = I.microEntrepriseCheck && I.microEntrepriseCheck.checked;
-  const franchiseMod=Math.max(0, parseInt(I.franchiseMod.value)||0);
-  const plaf=parseEuro(I.plafondMod.value)||0;
-  const modAuto=!!I.modAuto.checked;
-  const ijModCustom=parseEuro(I.ijModCustom.value)||0;
-  const horizonM=Math.max(1, parseInt(I.horizon.value)||60);
+  const franchiseMod=Math.max(0, parseInt(I.franchiseMod?.value)||0);
+  const plaf=parseEuro(I.plafondMod?.value)||0;
+  const modAuto=!!I.modAuto?.checked;
+  const ijModCustom=parseEuro(I.ijModCustom?.value)||0;
+  const horizonM=Math.max(1, parseInt(I.horizon?.value)||60);
   const modEnabled = $('modToggle') ? !!$('modToggle').checked : true;
 
-  
   // Annual reference income
   let annualRef = salaireM * 12;
   let microNote = '';
@@ -301,8 +304,16 @@ const profId=I.profession.value, scen=I.scenario.value;
     if (I.microSummary) I.microSummary.textContent = '';
   }
 
+  // Contexte pour la frise & calculs
+  const ctx={
+    profId, scen, salaireM, chargesM, cibleM, cibleJ,
+    carenceCreation, isAffiliationOK, isMicro,
+    mod:{ franchise:franchiseMod, plafond:plaf, max_j:1095, auto:modAuto, custom:ijModCustom, enabled:modEnabled },
+    horizonM, annualRef
+  };
 
-  // Remplacement : Le tableau des montants mensuels 'mod' est renommé 'modSeries'
+  // Séries mensuelles
+  const M = horizonM;
   const modSeries = [];
   const ro=[],sans=[],avec=[],cpam=[],caissePro=[];
   let anyWarn=false,carence=0,ijro=0,max=0;
@@ -311,38 +322,37 @@ const profId=I.profession.value, scen=I.scenario.value;
   if(!selectedProf || !selectedProf.ro || !selectedProf.ro[scen]) return;
 
   for(let m=0;m<M;m++){
-    const f = (function flowMonth(m){
-      const r=computeROMonth(m, profId, scen, ctx.annualRef, carenceCreation, isAffiliationOK, isMicro);
-      let ijModj=modAuto ? Math.max(0, (cibleJ - r.roIJj)) : Math.max(0, ijModCustom);
-      if(plaf>0) ijModj=Math.min(ijModj, plaf);
-      if(!modEnabled) ijModj=0;
-      const dMod=coveredDays(franchiseMod, m, 1095);
-      const modM=dMod*ijModj;
-      return { roM:r.roM, roIJj:r.roIJj, modM, sans:r.roM, avec:r.roM+modM, carence:r.carence, max:r.max, warn:r.warn, cpamM:r.cpamM, caisseProM:r.caisseProM };
-    })(m);
-    ro.push(f.roM); modSeries.push(f.modM); sans.push(f.sans); avec.push(f.avec); cpam.push(f.cpamM); caissePro.push(f.caisseProM);
-    if(m===0){carence=f.carence; ijro=f.roIJj; max=f.max;}
-    if(f.warn) anyWarn=true;
-  }
-  
-  // Correction: Création de l'objet ctx pour la frise
-  const ctx={ profId, scen, salaireM, chargesM, cibleM, cibleJ, carenceCreation, isAffiliationOK, isMicro,
-              mod:{ franchise:franchiseMod, plafond:plaf, max_j:1095, auto:modAuto, custom:ijModCustom, enabled:modEnabled },
-              horizonM, annualRef };
+    const r=computeROMonth(m, profId, scen, annualRef, carenceCreation, isAffiliationOK, isMicro);
+    let ijModj=modAuto ? Math.max(0, (cibleJ - r.roIJj)) : Math.max(0, ijModCustom);
+    if(plaf>0) ijModj=Math.min(ijModj, plaf);
+    if(!modEnabled) ijModj=0;
+    const dMod=coveredDays(franchiseMod, m, 1095);
+    const modM=dMod*ijModj;
 
+    ro.push(r.roM); modSeries.push(modM); sans.push(r.roM); avec.push(r.roM+modM); cpam.push(r.cpamM); caissePro.push(r.caisseProM);
+    if(m===0){carence=r.carence; ijro=r.roIJj; max=r.max;}
+    if(r.warn) anyWarn=true;
+  }
 
   const charges = new Array(M).fill(chargesM), cible = new Array(M).fill(cibleM);
   const A1=Math.min(12,M), mean=a=>a.slice(0,A1).reduce((x,t)=>x+t,0)/A1, kAvec=mean(avec), kSans=mean(sans), kReste=kAvec-chargesM, kManqueSans=Math.max(0, chargesM-kSans);
-  $('vA1Avec').textContent=F0.format(kAvec)+'/mois'; $('vA1Reste').textContent=F0.format(kReste)+'/mois'; $('vA1Sans').textContent=F0.format(kManqueSans)+'/mois';
-  $('kA1Avec').className='kpi '+(kAvec>=chargesM?'ok':'bad'); $('kA1Reste').className='kpi '+(kReste>=0?'ok':'bad'); $('kA1Sans').className='kpi '+(kManqueSans===0?'ok':'bad');
+  if($('vA1Avec')) $('vA1Avec').textContent=F0.format(kAvec)+'/mois'; 
+  if($('vA1Reste')) $('vA1Reste').textContent=F0.format(kReste)+'/mois'; 
+  if($('vA1Sans'))  $('vA1Sans').textContent=F0.format(kManqueSans)+'/mois';
+  if($('kA1Avec')) $('kA1Avec').className='kpi '+(kAvec>=chargesM?'ok':'bad'); 
+  if($('kA1Reste')) $('kA1Reste').className='kpi '+(kReste>=0?'ok':'bad'); 
+  if($('kA1Sans'))  $('kA1Sans').className='kpi '+(kManqueSans===0?'ok':'bad');
 
   let carenceInfo=`Carence RO : ${carence} j`; if(carenceCreation>0) carenceInfo+=` (incl. création ${carenceCreation} j)`;
-  $('bCarence').textContent=carenceInfo; $('bIJRO').textContent=`IJ RO : ${F2.format(ijro)}/j`; $('bMax').textContent=`Durée max RO : ${max} j`; $('bFranchise').textContent=`Franchise Moduvéo : ${franchiseMod} j`; $('bCible').textContent=`Salaire cible : ${F0.format(cibleM)}/mois`;
-  I.warn.classList.toggle('show', !!anyWarn);
-  $('modHint').textContent = modAuto ? `Suggestion automatique ≈ ${F2.format(Math.max(0, cibleJ - ijro))}/j` : `Montant manuel Moduvéo: ${F2.format(ijModCustom)}/j`;
-  if(I.microEntrepriseBlock) I.microEntrepriseBlock.style.display = (profId.includes('ssi')) ? 'flex' : 'none';
+  if($('bCarence')) $('bCarence').textContent=carenceInfo; 
+  if($('bIJRO')) $('bIJRO').textContent=`IJ RO : ${F2.format(ijro)}/j`; 
+  if($('bMax')) $('bMax').textContent=`Durée max RO : ${max} j`; 
+  if($('bFranchise')) $('bFranchise').textContent=`Franchise Moduvéo : ${franchiseMod} j`; 
+  if($('bCible')) $('bCible').textContent=`Salaire cible : ${F0.format(cibleM)}/mois`;
+  if(I.warn) I.warn.classList.toggle('show', !!anyWarn);
+  if($('modHint')) $('modHint').textContent = modAuto ? `Suggestion automatique ≈ ${F2.format(Math.max(0, cibleJ - ijro))}/j` : `Montant manuel Moduvéo: ${F2.format(ijModCustom)}/j`;
+  if(I.microEntrepriseBlock) I.microEntrepriseBlock.style.display = (profId.includes('ssi') || profId==='lib_nr') ? 'flex' : 'none';
 
-  // Remplacement: Le graphe reçoit maintenant modSeries
   drawChart({months:M, cpam, caissePro, mod: modSeries, charges, cible, sans, avec});
 
   const roCfg=selectedProf.ro[scen];
@@ -353,9 +363,8 @@ const profId=I.profession.value, scen=I.scenario.value;
   } else if(roCfg?.ro_kind==='pl_caisse' && !roCfg?.caisse){
     sous+=' • Pas de couverture après J90';
   }
-  $('paveMetier').textContent=`${selectedProf.label} — scénario ${scen} • ${sous}`;
+  if($('paveMetier')) $('paveMetier').textContent=`${selectedProf.label} — scénario ${scen} • ${sous}`;
 
-  // Remplacement: L'objet ctx.mod n'est plus réaffecté
   renderPave(ctx, {carence, max, ijro});
   saveState();
 }
@@ -364,31 +373,27 @@ const profId=I.profession.value, scen=I.scenario.value;
 function renderPave(ctx, meta){
   // --- Garde-fous de vérification des IDs ---
   ['timeline2','barCreation','barCarence','barCpam','barCaisse','barFranchise','barMod',
-  'tagEndRO','tagDebutMod','tlRuler','tlCursor','tlPanelBody','labelCaisse','tlSummary']
+   'tagEndRO','tagDebutMod','tlRuler','tlCursor','tlPanelBody','labelCaisse','tlSummary']
   .forEach(id=>{ if(!$(id)) console.warn('❌ id manquant :', id); });
 
   // normalized context
   const profId     = (ctx && ctx.profId) ? ctx.profId : (I.profession?.value || '');
-  const annualRef  = (ctx && typeof ctx.annualRef !== 'undefined') ? Number(ctx.annualRef) : Number((parseEuro($('salaireM').value)||0)*12);
+  const annualRef  = (ctx && typeof ctx.annualRef !== 'undefined') ? Number(ctx.annualRef) : Number((parseEuro($('salaireM')?.value)||0)*12);
   const isMicro    = !!(ctx && ctx.isMicro);
   const mod        = (ctx && ctx.mod) ? ctx.mod : (meta || {});
   const modEnabled = !!(mod && mod.enabled);
   const horizonM   = (ctx && typeof ctx.horizonM!=='undefined') ? Number(ctx.horizonM) : 60;
-  const isSSI      = profId.startsWith('ssi_');
-  const isPL       = profId.startsWith('pl_') || profId.startsWith('lib_');
   const carence    = Number((meta && meta.carence) ?? 3);
   const maxDays    = Number((meta && meta.max) ?? 360);
-  const ij         = Math.max(0, Math.round((Number(annualRef)/730)*100)/100);
-  const segments   = [];
-  const badges     = [];
 
-const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
+  const prof = CATALOG.profs.find(x=>x.id===profId); if (!prof) return;
   const root=$('timeline2'), tagEndRO=$('tagEndRO'), tagDebutMod=$('tagDebutMod'), ruler=$('tlRuler'), cursor=$('tlCursor'), panelBody=$('tlPanelBody');
   const barCreation=$('barCreation'), barCarence=$('barCarence'), barCpam=$('barCpam'), barCaisse=$('barCaisse'), barFranch=$('barFranchise'), barMod=$('barMod');
 
   daltonien = $('daltoToggle') ? !!$('daltoToggle').checked : false; document.body.classList.toggle('daltonien', daltonien);
 
-  const roCfg = prof.ro[$('scenario').value]; const extra=Math.max(0, parseInt($('carenceCreation').value)||0);
+  const roCfg = prof.ro[$('scenario')?.value || 'maladie']; 
+  const extra=Math.max(0, parseInt($('carenceCreation')?.value)||0);
   const affOK = !(I.affiliationCheck && I.affiliationCheck.checked);
 
   // Met à jour le libellé de la voie caisse pro avec le vrai nom
@@ -398,120 +403,119 @@ const prof = CATALOG.profs.find(x=>x.id===ctx.profId); if (!prof) return;
   let cpamS=0, cpamE=0, caisseS=0, caisseE=0, cpamIJ=0, caisseIJ=0;
   if (roCfg.ro_kind==='pl_caisse'){
     cpamS=(roCfg.cpam?.carence_j ?? 3)+extra; cpamE=(roCfg.cpam?.max_j ?? 90)+extra; cpamIJ=ijFromFormula(roCfg.cpam?.f || 'cpam_1_730e', annualRef, isMicro);
-    
     const caisse=roCfg.caisse||{};
     const isCaisseDefined = Object.keys(caisse).length > 0;
-    
     if (isCaisseDefined) {
       caisseS = (caisse.start_j || 91) + extra;
       caisseE = (caisse.max_j || 1095) + extra;
-      if(caisse.kind === 'fixed'){
-        caisseIJ = caisse.ij_j ?? 0;
-      } else if(caisse.kind === 'piecewise'){
+      if(caisse.kind === 'fixed'){ caisseIJ = caisse.ij_j ?? 0; }
+      else if(caisse.kind === 'piecewise'){
         let found = null;
-        for(const b of caisse.bands){
-          if(annualRef <= b.rev_max){
-            found = b;
-            break;
-          }
-        }
+        for(const b of caisse.bands){ if(annualRef <= b.rev_max){ found = b; break; } }
         caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
       }
-    } else {
-        caisseS = cpamE + 1;
-        caisseE = cpamE;
-        caisseIJ = 0;
-    }
+    } else { caisseS = cpamE + 1; caisseE = cpamE; caisseIJ = 0; }
   } else {
-    cpamS=(roCfg.carence_j||0)+extra; cpamE=meta.max; cpamIJ=(roCfg.ij_j ?? ijFromFormula(roCfg.f, annualRef, isMicro)) || 0;
+    cpamS=(roCfg.carence_j||0)+extra; cpamE=maxDays; cpamIJ=(roCfg.ij_j ?? ijFromFormula(roCfg.f, annualRef, isMicro)) || 0;
   }
 
-  // Correction 2: Gérer la largeur des barres de 1px
-  const W = root.clientWidth || 600, pad = 14;
-  const maxToUse = (meta.max && meta.max > 0) ? meta.max : 90;
-  const worldMax = Math.max(maxToUse, ctx.mod.max_j || 0, 365);
+  const W = (root?.clientWidth || 600), pad = 14;
+  const worldMax = Math.max(maxDays, ctx.mod?.max_j || 0, 365);
   const zoomMax  = (zoomMode === '180') ? 180 : worldMax;
   const px = d => Math.round(pad + (Math.min(d, zoomMax) / zoomMax) * (W - pad * 2));
-  const invPx = x => Math.round(((x - pad) / (W - pad * 2)) * zoomMax);
 
   function setBar(el, dStart, dEnd, labelText){
     if (!el) return;
     let s = Math.max(0, Number(dStart) || 0);
     let e = Math.min(zoomMax, Number(dEnd)   || 0);
-
-    // Si start==end mais segment logique, on montre ~0.5j pour visibilité
-    if (e <= s && (s > 0 || e > 0)) e = s + 0.5;
-
+    if (e <= s && (s > 0 || e > 0)) e = s + 0.5; // 0.5j visible
     const L = Math.max(px(s), pad), R = Math.min(px(e), W - pad);
     const w = Math.max(0, R - L);
-
     el.style.left = L + 'px';
     el.style.width = w + 'px';
     el.style.opacity = (w > 0) ? '1' : '0';
     if (labelText) el.setAttribute('data-label', labelText);
   }
 
-  // Log de diagnostic
-  console.log('[frise]', { cpamS, cpamE, caisseS, caisseE, cpamIJ, caisseIJ, carence, extra, affOK, zoomMode, zoomMax });
-
   setBar(barCreation, 0, extra, extra>0?`J0→J${extra}`:'');
-  if(!affOK){ setBar(barCarence, 0, meta.max, `Affiliation < 12 mois`); }
-  else { setBar(barCarence, extra, meta.carence, meta.carence>extra?`Carence RO J${extra+1}→J${meta.carence}`:''); }
+  if(!affOK){ setBar(barCarence, 0, maxDays, `Affiliation < 12 mois`); }
+  else { setBar(barCarence, extra, carence, carence>extra?`Carence RO J${extra+1}→J${carence}`:''); }
 
   if(affOK){
     setBar(barCpam, cpamS, cpamE, (cpamE>cpamS)?`J${cpamS+1}→J${cpamE} • ~${F2.format(cpamIJ)}/j`:'');
     setBar(barCaisse, caisseS, caisseE, (caisseE>caisseS && caisseIJ>0)?`J${caisseS}→J${caisseE} • ~${F2.format(caisseIJ)}/j`:(caisseE>caisseS?`J${caisseS}→J${caisseE} • 0 €/j`:'')); 
   } else { setBar(barCpam,0,0,''); setBar(barCaisse,0,0,''); }
 
-  // Correction 3: Gérer la durée et l'affichage de Moduvéo
-  ijModFinal = ctx.mod.auto ? Math.max(0, ctx.cibleJ - meta.ijro) : Math.max(0, ctx.mod.custom||0);
-  const modDur = Math.max(0, (ctx.mod.max_j || 1095) - (ctx.mod.franchise || 0));
-  setBar(barFranch, 0, modEnabled ? ctx.mod.franchise : 0, (modEnabled && ctx.mod.franchise>0) ? `Franchise ${ctx.mod.franchise} j` : '');
-  setBar(barMod, modEnabled ? ctx.mod.franchise : 0, modEnabled ? ctx.mod.max_j : 0, modEnabled ? `J${ctx.mod.franchise}→J${ctx.mod.max_j} • ~${F2.format(ijModFinal)}/j` : '');
+  const ijModFinal = ctx.mod?.auto ? Math.max(0, ctx.cibleJ - meta.ijro) : Math.max(0, ctx.mod?.custom||0);
+  setBar(barFranch, 0, (modEnabled ? (ctx.mod?.franchise||0) : 0), (modEnabled && (ctx.mod?.franchise||0)>0) ? `Franchise ${ctx.mod.franchise} j` : '');
+  setBar(barMod, (modEnabled ? (ctx.mod?.franchise||0) : 0), (modEnabled ? (ctx.mod?.max_j||0) : 0), modEnabled ? `J${ctx.mod.franchise}→J${ctx.mod.max_j} • ~${F2.format(ijModFinal)}/j` : '');
 
-  tagEndRO.style.left=px(meta.max)+'px'; tagEndRO.textContent='Fin droits RO';
-  tagDebutMod.style.left=px(ctx.mod.franchise)+'px'; tagDebutMod.textContent='Début Moduvéo';
+  if(tagEndRO){ tagEndRO.style.left=px(maxDays)+'px'; tagEndRO.textContent='Fin droits RO'; }
+  if(tagDebutMod){ tagDebutMod.style.left=px(ctx.mod?.franchise||0)+'px'; tagDebutMod.textContent='Début Moduvéo'; }
 
-  ruler.innerHTML=''; const marks=[0,30,90,180,365,730,1095, zoomMax].filter((v,i,a)=> i===0 || (v>a[i-1] && v<=zoomMax));
-  for(const d of marks){ const tick=document.createElement('div'); tick.className='tl-tick'+(([0,30,90,180,365,730,1095].includes(d))?' strong':''); tick.style.left=px(d)+'px'; const lab=document.createElement('strong'); lab.textContent='J'+d; tick.appendChild(lab); ruler.appendChild(tick); }
+  if(ruler){
+    ruler.innerHTML='';
+    const marks=[0,30,90,180,365,730,1095, zoomMax].filter((v,i,a)=> i===0 || (v>a[i-1] && v<=zoomMax));
+    for(const d of marks){
+      const tick=document.createElement('div');
+      tick.className='tl-tick'+(([0,30,90,180,365,730,1095].includes(d))?' strong':'');
+      tick.style.left=px(d)+'px';
+      const lab=document.createElement('strong'); lab.textContent='J'+d;
+      tick.appendChild(lab); ruler.appendChild(tick);
+    }
+  }
 
   let tip=document.querySelector('.tl-tooltip'); if(!tip){ tip=document.createElement('div'); tip.className='tl-tooltip'; tip.style.display='none'; document.body.appendChild(tip); }
   function payerAtDay(D){
     if(!affOK) return {who:'Carence (affiliation)', ij:0};
-    if(D<meta.carence) return {who:'Carence RO', ij:0};
-    if(roCfg.ro_kind==='pl_caisse'){ if(D>=cpamS && D<=cpamE) return {who:'CPAM', ij:cpamIJ}; if(D>=caisseS && D<=caisseE) return {who:'Caisse pro', ij:caisseIJ}; return {who:'—', ij:0}; }
-    else { if(D>=cpamS && D<=cpamE) return {who:'RO', ij:cpamIJ}; return {who:'—', ij:0}; }
+    if(D<carence) return {who:'Carence RO', ij:0};
+    if(roCfg.ro_kind==='pl_caisse'){
+      if(D>=cpamS && D<=cpamE) return {who:'CPAM', ij:cpamIJ};
+      if(D>=caisseS && D<=caisseE) return {who:'Caisse pro', ij:caisseIJ};
+      return {who:'—', ij:0};
+    } else {
+      if(D>=cpamS && D<=cpamE) return {who:'RO', ij:cpamIJ};
+      return {who:'—', ij:0};
+    }
   }
-  function modAtDay(D){ const on=(D>=ctx.mod.franchise && D<=ctx.mod.max_j && ( $('modToggle')?$('modToggle').checked:true )); return {on, ij:on?ijModFinal:0}; }
+  function modAtDay(D){ const on=(D>=(ctx.mod?.franchise||0) && D<=(ctx.mod?.max_j||0) && ( $('modToggle')?$('modToggle').checked:true )); return {on, ij:on?ijModFinal:0}; }
   function updatePanel(day){
-    const pay=payerAtDay(day); const mod=modAtDay(day);
-    panelBody.innerHTML=[ `<div><b>Jour</b> : J${day}</div>`, `<div><b>RO</b> : ${pay.who}${pay.ij?` • ${F2.format(pay.ij)}/j`:''}</div>`, `<div><b>Moduvéo</b> : ${mod.on ? `${F2.format(mod.ij)}/j` : '—'}</div>` ].join('');
+    const pay=payerAtDay(day); const md=modAtDay(day);
+    if($('tlPanelBody')){
+      $('tlPanelBody').innerHTML=[
+        `<div><b>Jour</b> : J${day}</div>`,
+        `<div><b>RO</b> : ${pay.who}${pay.ij?` • ${F2.format(pay.ij)}/j`:''}</div>`,
+        `<div><b>Moduvéo</b> : ${md.on ? `${F2.format(md.ij)}/j` : '—'}</div>`
+      ].join('');
+    }
   }
 
-  root.onmousemove=(ev)=>{
-    const r=root.getBoundingClientRect();
-    const x=Math.max(pad, Math.min(ev.clientX - r.left, r.width - pad));
-    cursor.style.left=x+'px';
-    const d=Math.min(Math.max(Math.round(((x-pad)/(W - pad*2))*zoomMax),0), zoomMax);
-    updatePanel(d);
-    const modState=(d>=ctx.mod.franchise && d<=ctx.mod.max_j && ($('modToggle')?$('modToggle').checked:true)) ? 'Moduvéo actif' : 'Moduvéo inactif';
-    tip.innerHTML=`<b>J${d}</b><br>${payerAtDay(d).who}<br>${modState}`;
-    tip.style.left=(ev.clientX+14)+'px';
-    tip.style.top =(ev.clientY+14)+'px';
-    tip.style.display='block';
-  };
-  root.onmouseleave=()=>{ tip.style.display='none'; };
+  if(root){
+    root.onmousemove=(ev)=>{
+      const r=root.getBoundingClientRect();
+      const x=Math.max(pad, Math.min(ev.clientX - r.left, r.width - pad));
+      if($('tlCursor')) $('tlCursor').style.left=x+'px';
+      const d=Math.min(Math.max(Math.round(((x-pad)/(W - pad*2))*zoomMax),0), zoomMax);
+      updatePanel(d);
+      const modState=(d>=(ctx.mod?.franchise||0) && d<=(ctx.mod?.max_j||0) && ($('modToggle')?$('modToggle').checked:true)) ? 'Moduvéo actif' : 'Moduvéo inactif';
+      tip.innerHTML=`<b>J${d}</b><br>${payerAtDay(d).who}<br>${modState}`;
+      tip.style.left=(ev.clientX+14)+'px';
+      tip.style.top =(ev.clientY+14)+'px';
+      tip.style.display='block';
+    };
+    root.onmouseleave=()=>{ tip.style.display='none'; };
+  }
 
-  const sum=$('tlSummary'); const cpamDur=Math.max(0, cpamE-cpamS), caisseDur=Math.max(0, caisseE-caisseS);
-  const ijModFinalSummary = ctx.mod.auto ? Math.max(0, ctx.cibleJ - meta.ijro) : Math.max(0, ctx.mod.custom||0);
-  const modDurSummary = Math.max(0, (ctx.mod.max_j || 1095) - (ctx.mod.franchise || 0));
-  
-  const chips=[]; if(cpamDur>0) chips.push(`CPAM ${cpamDur} j • ${F2.format(cpamIJ)}/j`); if(caisseE>caisseS) chips.push(`${caisseName} ${caisseDur} j • ${F2.format(caisseIJ)}/j`); chips.push(`Moduvéo ${modDurSummary} j • ${F2.format(ijModFinalSummary)}/j`);
-  sum.innerHTML=chips.map(c=>`<span class="chip">${c}</span>`).join('');
+  const cpamDur=Math.max(0, cpamE-cpamS), caisseDur=Math.max(0, caisseE-caisseS);
+  const chips=[];
+  if(cpamDur>0) chips.push(`CPAM ${cpamDur} j • ${F2.format(cpamIJ)}/j`);
+  if(caisseE>caisseS) chips.push(`${caisseName} ${caisseDur} j • ${F2.format(caisseIJ)}/j`);
+  chips.push(`Moduvéo ${Math.max(0,(ctx.mod?.max_j||1095)-(ctx.mod?.franchise||0))} j • ${F2.format(ijModFinal)}/j`);
+  if($('tlSummary')) $('tlSummary').innerHTML=chips.map(c=>`<span class="chip">${c}</span>`).join('');
 }
 
 /* ---------- UI ---------- */
-function initProf(){ $('profession').innerHTML = CATALOG.profs.map(p=>`<option value="${p.id}">${p.label}</option>`).join(''); }
+function initProf(){ if(!$('profession')) return; $('profession').innerHTML = CATALOG.profs.map(p=>`<option value="${p.id}">${p.label}</option>`).join(''); }
 function bindUI(){
   const ids=['profession','scenario','salaireM','chargesM','carenceCreation','affiliation-check','microEntrepriseCheck','franchiseMod','plafondMod','ijModCustom','modAuto','horizon','cibleM','cibleSame','modToggle','daltoToggle','zoom180','zoomFull'];
   ids.forEach(id=>{
@@ -526,20 +530,19 @@ function bindUI(){
 
   if ($('btnView')) $('btnView').addEventListener('click', ()=>{ viewByYear=!viewByYear; $('btnView').textContent=viewByYear?'🗓 Année':'🗓 Mois'; simulate(); });
 
-
   const toggleMicroUI = () => {
-  const prof = I.profession.value || '';
-  const eligible = prof.startsWith('ssi_') || (prof === 'lib_nr');
-  if (I.microEntrepriseBlock) I.microEntrepriseBlock.style.display = 'block';
-  if (I.microEntrepriseCheck){
-    I.microEntrepriseCheck.disabled = !eligible;
-    if (!eligible) I.microEntrepriseCheck.checked = false;
-  }
-  const on = eligible && I.microEntrepriseCheck && I.microEntrepriseCheck.checked;
-  if (I.microAct) I.microAct.disabled = !on;
-  if (I.microCA)  I.microCA.disabled  = !on;
-  if (!on && I.microSummary) I.microSummary.textContent = eligible ? '' : 'Profil non éligible au micro-entreprise';
-};
+    const prof = I.profession?.value || '';
+    const eligible = prof.startsWith('ssi_') || (prof === 'lib_nr');
+    if (I.microEntrepriseBlock) I.microEntrepriseBlock.style.display = 'block';
+    if (I.microEntrepriseCheck){
+      I.microEntrepriseCheck.disabled = !eligible;
+      if (!eligible) I.microEntrepriseCheck.checked = false;
+    }
+    const on = eligible && I.microEntrepriseCheck && I.microEntrepriseCheck.checked;
+    if (I.microAct) I.microAct.disabled = !on;
+    if (I.microCA)  I.microCA.disabled  = !on;
+    if (!on && I.microSummary) I.microSummary.textContent = eligible ? '' : 'Profil non éligible au micro-entreprise';
+  };
 
   // initial toggle
   toggleMicroUI();
@@ -550,42 +553,41 @@ function bindUI(){
     el.addEventListener('input',  ()=>{ simulate(); });
   });
 
-
-  const updateCible=()=>{ if ($('cibleSame').checked){ $('cibleM').value=$('salaireM').value; $('cibleM').disabled=true; } else { $('cibleM').disabled=false; } simulate(); };
-  $('cibleSame').addEventListener('change', updateCible);
-  $('salaireM').addEventListener('input', updateCible);
+  const updateCible=()=>{ if ($('cibleSame')?.checked){ if($('cibleM')) $('cibleM').value=$('salaireM')?.value||''; if($('cibleM')) $('cibleM').disabled=true; } else { if($('cibleM')) $('cibleM').disabled=false; } simulate(); };
+  if($('cibleSame')) $('cibleSame').addEventListener('change', updateCible);
+  if($('salaireM')) $('salaireM').addEventListener('input', updateCible);
 }
 
 /* ---------- Bootstrap ---------- */
 (function init(){
   initProf();
   const s=loadState();
-  $('profession').value = s.profession;
-  $('scenario').value   = s.scenario;
-  $('salaireM').value   = s.salaireM;
-  $('chargesM').value   = s.chargesM;
+  if($('profession')) $('profession').value = s.profession;
+  if($('scenario'))   $('scenario').value   = s.scenario;
+  if($('salaireM'))   $('salaireM').value   = s.salaireM;
+  if($('chargesM'))   $('chargesM').value   = s.chargesM;
 
-  $('cibleM').value     = s.cibleM || s.salaireM;
-  $('cibleSame').checked = s.cibleSame;
+  if($('cibleM'))     $('cibleM').value     = s.cibleM || s.salaireM;
+  if($('cibleSame'))  $('cibleSame').checked = s.cibleSame;
 
-  $('carenceCreation').value = s.carenceCreation;
+  if($('carenceCreation')) $('carenceCreation').value = s.carenceCreation;
 
   if ($('affiliation-check'))    $('affiliation-check').checked = s.affiliationCheck;
   if ($('microEntrepriseCheck')) $('microEntrepriseCheck').checked = s.microEntrepriseCheck;
   if ($('microAct')) $('microAct').value = s.microAct || 'bic_vente';
   if ($('microCA'))  $('microCA').value  = s.microCA || '';
 
-  $('franchiseMod').value = s.franchiseMod;
-  $('plafondMod').value   = s.plafondMod;
-  $('ijModCustom').value  = s.ijModCustom;
-  $('modAuto').checked    = s.modAuto;
+  if($('franchiseMod')) $('franchiseMod').value = s.franchiseMod;
+  if($('plafondMod'))   $('plafondMod').value   = s.plafondMod;
+  if($('ijModCustom'))  $('ijModCustom').value  = s.ijModCustom;
+  if($('modAuto'))      $('modAuto').checked    = s.modAuto;
 
-  $('horizon').value = s.horizon;
+  if($('horizon')) $('horizon').value = s.horizon;
 
   bindUI();
 
   // État initial des champs liés à "Utiliser le salaire net"
-  if ($('cibleSame').checked) { $('cibleM').disabled = true; }
+  if ($('cibleSame')?.checked && $('cibleM')) { $('cibleM').disabled = true; }
 
   // Premier rendu
   simulate();
