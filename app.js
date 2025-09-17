@@ -131,7 +131,6 @@ const DEFAULT_STATE={ profession:'ssi_artisan', scenario:'maladie', salaireM:'30
 function loadState(){ try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return DEFAULT_STATE; return {...DEFAULT_STATE, ...JSON.parse(raw)}; }catch(e){ return DEFAULT_STATE; } }
 function saveState(){ try{ const s={ profession:I.profession?.value, scenario:I.scenario?.value, salaireM:I.salaireM?.value, chargesM:I.chargesM?.value, cibleM:I.cibleM?.value, cibleSame:!!I.cibleSame?.checked, carenceCreation:I.carenceCreation?.value, affiliationCheck:!!I.affiliationCheck?.checked, microEntrepriseCheck:!!I.microEntrepriseCheck?.checked, microAct:I.microAct?.value, microCA:I.microCA?.value, franchiseMod:I.franchiseMod?.value, plafondMod:I.plafondMod?.value, ijModCustom:I.ijModCustom?.value, modAuto:!!I.modAuto?.checked, horizon:I.horizon?.value }; localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){} }
 
-
 /* ---------- Calculs RO / Mod ---------- */
 function ijFromFormula(name, annualRef, isMicro=false){
   const f=CATALOG.formulas[name];
@@ -404,6 +403,100 @@ function simulate(){
       dot.title = `Couverture ${couverture}%`;
     }
   })();
+  
+  // ---- Milieu : Perte de salaire (mensuelle) ----
+  (function(){
+    const A1 = Math.min(12, Math.max(1, parseInt(I.horizon?.value)||60));
+    const mean = a => a.slice(0, A1).reduce((x,t)=>x+t,0)/A1;
+
+    const salaireM = parseEuro(I.salaireM?.value)||0;
+    const moyAvec  = mean(avec); // revenus moyens avec Moduvéo (12 mois)
+    const perteMensuelle = Math.max(0, salaireM - moyAvec);
+
+    const el = $('vPerteMensuelle');
+    if (el) el.textContent = `Perte de salaire : ${F0.format(perteMensuelle)}/mois`;
+  })();
+
+  // ---- Droite : Perte de revenu totale sur N jours d'arrêt ----
+  (function(){
+    const jours = Math.max(1, parseInt($('arretJours')?.value)||30);
+    const salaireJ = (parseEuro(I.salaireM?.value)||0)/30;
+
+    // Reprend la logique de renderPave pour connaître qui paie à J
+    const profId = I.profession.value, scen = I.scenario.value;
+    const selectedProf = CATALOG.profs.find(p=>p.id===profId);
+    if(!selectedProf) return;
+    const roCfg = selectedProf.ro[scen] || {};
+    const extra = Math.max(0, parseInt(I.carenceCreation?.value)||0);
+    const affOK = !(I.affiliationCheck && I.affiliationCheck.checked);
+
+    // CPAM/CAISSE phases + IJ
+    const annualRef = (parseEuro(I.salaireM?.value)||0)*12; // ou revenu micro si actif (déjà pris en compte plus haut)
+    const isMicro = I.microEntrepriseCheck && I.microEntrepriseCheck.checked;
+
+    let cpamS=0, cpamE=0, cpamIJ=0, caisseS=0, caisseE=0, caisseIJ=0, carence=0, maxDays=360;
+
+    if (roCfg.ro_kind==='pl_caisse'){
+      cpamS=(roCfg.cpam?.carence_j ?? 3)+extra;
+      cpamE=(roCfg.cpam?.max_j ?? 90)+extra;
+      cpamIJ=ijFromFormula(roCfg.cpam?.f || 'cpam_1_730e', annualRef, isMicro);
+      const caisse=roCfg.caisse||{};
+      const isCaisseDefined = Object.keys(caisse).length>0;
+      if(isCaisseDefined){
+        caisseS=(caisse.start_j||91)+extra;
+        caisseE=(caisse.max_j||1095)+extra;
+        if(caisse.kind==='fixed'){ caisseIJ=caisse.ij_j||0; }
+        else if(caisse.kind==='piecewise'){
+          let found=null; for(const b of caisse.bands){ if(annualRef<=b.rev_max){ found=b; break; } }
+          caisseIJ = found ? (found.ij_j!==undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
+        }
+        maxDays = Math.max(cpamE, caisseE);
+      } else {
+        caisseS = cpamE + 1; caisseE = cpamE; caisseIJ = 0; maxDays = cpamE;
+      }
+      carence = (roCfg.cpam?.carence_j ?? 3)+extra;
+    } else if (roCfg.ro_kind==='formula' || roCfg.ro_kind==='fixed'){
+      carence = (roCfg.carence_j||0)+extra;
+      maxDays = (roCfg.max_j||360)+extra;
+      cpamS = carence; cpamE = maxDays;
+      cpamIJ = (roCfg.ij_j ?? ijFromFormula(roCfg.f, annualRef, isMicro)) || 0;
+      caisseS = caisseE = 0; caisseIJ = 0;
+    }
+
+    // IJ Moduvéo par jour (auto ou manuel)
+    const cibleJ = (I.cibleSame?.checked ? (parseEuro(I.salaireM?.value)||0) : (parseEuro(I.cibleM?.value)||0)) / 30;
+    const modEnabled = $('modToggle') ? !!$('modToggle').checked : true;
+    let ijModFinal = I.modAuto?.checked ? Math.max(0, cibleJ - ( (cpamIJ>0)?cpamIJ:0 )) : Math.max(0, parseEuro(I.ijModCustom?.value)||0);
+    const plaf = parseEuro(I.plafondMod?.value)||0; if(plaf>0) ijModFinal = Math.min(ijModFinal, plaf);
+    const modStart = modEnabled ? Math.max(0, parseInt(I.franchiseMod?.value)||0) : Infinity;
+    const modEnd   = modEnabled ? 1095 : 0;
+
+    function roIJAt(d){
+      if(!affOK) return 0;
+      if(d<=carence) return 0;
+      if(roCfg.ro_kind==='pl_caisse'){
+        if(d>cpamS && d<=cpamE) return cpamIJ;
+        if(d>caisseS && d<=caisseE) return caisseIJ;
+        return 0;
+      } else {
+        if(d>cpamS && d<=cpamE) return cpamIJ;
+        return 0;
+      }
+    }
+    function modIJAt(d){
+      return (d>modStart && d<=modEnd) ? ijModFinal : 0;
+    }
+
+    let revenuTotal = 0;
+    for(let d=1; d<=jours; d++){
+      revenuTotal += roIJAt(d) + modIJAt(d);
+    }
+
+    const perteTotale = Math.max(0, (salaireJ*jours) - revenuTotal);
+    if($('vA1Sans')) $('vA1Sans').textContent = F0.format(perteTotale);
+    // couleur du KPI droite
+    if($('kA1Sans')) $('kA1Sans').className='kpi '+(perteTotale===0?'ok':'bad');
+  })();
 }
 
 /* ---------- Frise + UX ---------- */
@@ -552,7 +645,7 @@ function renderPave(ctx, meta){
 /* ---------- UI ---------- */
 function initProf(){ if(!$('profession')) return; $('profession').innerHTML = CATALOG.profs.map(p=>`<option value="${p.id}">${p.label}</option>`).join(''); }
 function bindUI(){
-  const ids=['profession','scenario','salaireM','chargesM','carenceCreation','affiliation-check','microEntrepriseCheck','franchiseMod','plafondMod','ijModCustom','modAuto','horizon','cibleM','cibleSame','modToggle','daltoToggle','zoom180','zoomFull'];
+  const ids=['profession','scenario','salaireM','chargesM','carenceCreation','affiliation-check','microEntrepriseCheck','franchiseMod','plafondMod','ijModCustom','modAuto','horizon','cibleM','cibleSame','modToggle','daltoToggle','zoom180','zoomFull','arretJours'];
   ids.forEach(id=>{
     const el=$(id); if(!el) return;
     el.addEventListener('input', simulate);
@@ -654,38 +747,29 @@ function bindUI(){
   if($('modAuto'))      $('modAuto').checked    = s.modAuto;
 
   if($('horizon')) $('horizon').value = s.horizon;
+  if($('arretJours')) $('arretJours').value = s.arretJours || 30;
 
   bindUI();
 
   if ($('cibleSame')?.checked && $('cibleM')) { $('cibleM').disabled = true; }
-
-  const scenarioButtons = {
-    'btnMaladie30j': { scenario: 'maladie', horizon: 1, horizonDays: 30 },
-    'btnAccident45j': { scenario: 'atmp', horizon: 2, horizonDays: 45 },
-    'btnHospitalisation7j': { scenario: 'maladie', horizon: 1, horizonDays: 7 },
-    'btnBurnout90j': { scenario: 'maladie', horizon: 3, horizonDays: 90 },
-    'btnBlessureSport15j': { scenario: 'autre', horizon: 1, horizonDays: 15 },
-    'btnArretLong': { scenario: 'maladie', horizon: 12, horizonDays: 365 },
-  };
-
-  for (const [id, config] of Object.entries(scenarioButtons)) {
-    const btn = document.getElementById(id);
-    if (btn) {
-      btn.addEventListener('click', () => {
-        I.scenario.value = config.scenario;
-        I.horizon.value = config.horizon;
-        I.carenceCreation.value = '0';
-        I.affiliationCheck.checked = false;
-        
-        I.scenario.dispatchEvent(new Event('change'));
-        I.horizon.dispatchEvent(new Event('change'));
-        I.carenceCreation.dispatchEvent(new Event('change'));
-        I.affiliationCheck.dispatchEvent(new Event('change'));
-        
-        simulate();
-      });
-    }
+  
+  function applyExample({scenario='maladie', franchise=15, horizon=60, jours=30, note='Scénario type'}){
+    if($('scenario')) $('scenario').value = scenario;
+    if($('franchiseMod')) $('franchiseMod').value = String(franchise);
+    if($('horizon')) $('horizon').value = String(horizon);
+    if($('arretJours')) $('arretJours').value = String(jours);
+    simulate();
   }
+  
+  const ex = [
+    ['btnMaladie30j',       ()=>applyExample({scenario:'maladie', jours:30, note:'Maladie 30 j'})],
+    ['btnAccident45j',      ()=>applyExample({scenario:'atmp', jours:45, note:'Accident 45 j'})],
+    ['btnHospitalisation7j',()=>applyExample({scenario:'maladie', jours:7, franchise:7, note:'Hospitalisation 7 j'})],
+    ['btnBurnout90j',       ()=>applyExample({scenario:'maladie', jours:90, note:'Burnout 90 j'})],
+    ['btnBlessureSport15j', ()=>applyExample({scenario:'autre', jours:15, note:'Blessure (sport) 15 j'})],
+    ['btnArretLong',        ()=>applyExample({scenario:'maladie', jours:365, horizon:12, note:'Arrêt long 1 an'})],
+  ];
+  ex.forEach(([id,fn])=>{ const b=$(id); if(b) b.addEventListener('click', fn); });
 
   simulate();
   (function(){ const e=new Event('change'); if ($('profession')) $('profession').dispatchEvent(e); if ($('microEntrepriseCheck')) $('microEntrepriseCheck').dispatchEvent(e); })();
