@@ -628,14 +628,125 @@ function bindUI(){
 
   if ($('cibleSame')?.checked && $('cibleM')) { $('cibleM').disabled = true; }
 
-  // New logic for scenario buttons
+  // New function to calculate and show the impact bubble
+  function showImpactBubble(scenarioConfig) {
+    const bulle = document.getElementById('impact-bubble');
+    const texte = document.getElementById('impact-text');
+
+    // Hide the bubble initially
+    bulle.classList.add('hidden');
+
+    const { horizonDays } = scenarioConfig;
+    if (!horizonDays) return;
+
+    const salaireM = parseEuro(I.salaireM.value) || 0;
+    const cibleM = I.cibleSame.checked ? salaireM : parseEuro(I.cibleM.value) || 0;
+    const cibleJ = cibleM / 30;
+
+    let totalGains = 0;
+    const profId = I.profession.value, scen = I.scenario.value;
+    const annualRef = salaireM * 12;
+    const carenceCreation = Math.max(0, parseInt(I.carenceCreation.value) || 0);
+    const isAffiliationOK = !(I.affiliationCheck.checked);
+    const isMicro = I.microEntrepriseCheck.checked;
+    const modEnabled = !!$('modToggle')?.checked;
+    const franchiseMod = Math.max(0, parseInt(I.franchiseMod.value) || 0);
+    const plaf = parseEuro(I.plafondMod.value) || 0;
+    const ijModCustom = parseEuro(I.ijModCustom.value) || 0;
+    const modAuto = !!I.modAuto.checked;
+    const selectedProf = CATALOG.profs.find(p=>p.id===profId);
+    if (!selectedProf || !selectedProf.ro || !selectedProf.ro[scen]) return;
+
+    for (let d = 0; d < horizonDays; d++) {
+        // Daily RO calculation
+        const r = computeDailyRO(d, profId, scen, annualRef, carenceCreation, isAffiliationOK, isMicro);
+        
+        // Daily Moduvo calculation
+        let ijModj = modAuto ? Math.max(0, (cibleJ - r.ij)) : Math.max(0, ijModCustom);
+        if (plaf > 0) ijModj = Math.min(ijModj, plaf);
+        if (!modEnabled || d < franchiseMod) ijModj = 0;
+
+        totalGains += r.ij + ijModj;
+    }
+
+    const perteTotale = Math.max(0, (cibleJ * horizonDays) - totalGains);
+    const perteFormatted = F0.format(perteTotale);
+
+    texte.textContent = `Pertes de revenus sur ${horizonDays} jours : ${perteFormatted}`;
+    
+    // Show the bubble after a short delay
+    setTimeout(() => {
+      bulle.classList.remove('hidden');
+    }, 100);
+
+    // Hide the bubble after 8 seconds
+    setTimeout(() => {
+      bulle.classList.add('hidden');
+    }, 8000);
+  }
+
+  // New helper function for daily RO calculation
+  function computeDailyRO(day, profId, scen, annualRef, carenceCreation, isAffiliationOK, isMicro) {
+    const p = CATALOG.profs.find(x => x.id === profId);
+    const cfg = p?.ro?.[scen];
+    if (!cfg || !isAffiliationOK) return { ij: 0 };
+
+    const extra = Math.max(0, parseInt(carenceCreation) || 0);
+
+    // fixed rate case
+    if (cfg.ro_kind === 'fixed') {
+      const carence = (cfg.carence_j || 0) + extra;
+      const max = (cfg.max_j || Infinity) + extra;
+      if (day >= carence && day < max) {
+        if (p.id === 'cnbf_avocat') return { ij: 90 };
+        if (p.id === 'msa_exploitant' && cfg.piecewise_j) {
+            if (day < carence + 28) return { ij: 25.79 };
+            return { ij: 34.39 };
+        }
+        return { ij: cfg.ij_j || 0 };
+      }
+    }
+
+    // formula rate case
+    if (cfg.ro_kind === 'formula') {
+      const carence = (cfg.carence_j || 0) + extra;
+      const max = (cfg.max_j || Infinity) + extra;
+      if (day >= carence && day < max) {
+        return { ij: ijFromFormula(cfg.f, annualRef, isMicro) };
+      }
+    }
+    
+    // pl_caisse rate case
+    if (cfg.ro_kind === 'pl_caisse') {
+      const cpamS = (cfg.cpam?.carence_j ?? 3) + extra;
+      const cpamE = (cfg.cpam?.max_j ?? 90) + extra;
+      const caisse = cfg.caisse || {};
+      const caisseS = (caisse.start_j || 91) + extra;
+      const caisseE = (caisse.max_j || 1095) + extra;
+
+      if (day >= cpamS && day < cpamE) {
+        return { ij: ijFromFormula(cfg.cpam?.f || 'cpam_1_730e', annualRef, isMicro) };
+      }
+      if (day >= caisseS && day < caisseE) {
+        if (caisse.kind === 'fixed') return { ij: caisse.ij_j || 0 };
+        if (caisse.kind === 'piecewise') {
+          let found = null;
+          for(const b of caisse.bands){ if (annualRef <= b.rev_max) { found = b; break; } }
+          return { ij: found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0 };
+        }
+      }
+    }
+
+    return { ij: 0 };
+  }
+
   const scenarioButtons = {
-    'btnMaladie30j': { scenario: 'maladie', horizon: 1, note: 'Arrêt maladie de 30 jours', carenceCreation: '0', affil: false },
-    'btnAccident45j': { scenario: 'atmp', horizon: 2, note: 'Arrêt suite à un accident, 45 jours', carenceCreation: '0', affil: false },
-    'btnHospitalisation7j': { scenario: 'maladie', horizon: 1, note: 'Hospitalisation courte, 7 jours', carenceCreation: '0', affil: false },
-    'btnBurnout90j': { scenario: 'maladie', horizon: 3, note: 'Arrêt pour burnout, 90 jours', carenceCreation: '0', affil: false },
-    'btnBlessureSport15j': { scenario: 'autre', horizon: 1, note: 'Blessure de la vie courante, 15 jours', carenceCreation: '0', affil: false },
-    'btnArretLong': { scenario: 'maladie', horizon: 12, note: 'Maladie longue durée, 1 an', carenceCreation: '0', affil: false },
+    'btnMaladie30j': { scenario: 'maladie', horizon: 1, horizonDays: 30 },
+    'btnAccident45j': { scenario: 'atmp', horizon: 2, horizonDays: 45 },
+    'btnHospitalisation7j': { scenario: 'maladie', horizon: 1, horizonDays: 7 },
+    'btnBurnout90j': { scenario: 'maladie', horizon: 3, horizonDays: 90 },
+    'btnBlessureSport15j': { scenario: 'autre', horizon: 1, horizonDays: 15 },
+    'btnArretLong': { scenario: 'maladie', horizon: 12, horizonDays: 365 },
   };
 
   for (const [id, config] of Object.entries(scenarioButtons)) {
@@ -644,23 +755,21 @@ function bindUI(){
       btn.addEventListener('click', () => {
         I.scenario.value = config.scenario;
         I.horizon.value = config.horizon;
-        I.carenceCreation.value = config.carenceCreation;
-        I.affiliationCheck.checked = config.affil;
+        I.carenceCreation.value = '0';
+        I.affiliationCheck.checked = false;
         
-        // Mettre à jour l'affichage avant de simuler
         I.scenario.dispatchEvent(new Event('change'));
         I.horizon.dispatchEvent(new Event('change'));
         I.carenceCreation.dispatchEvent(new Event('change'));
         I.affiliationCheck.dispatchEvent(new Event('change'));
         
         simulate();
+        showImpactBubble(config);
       });
     }
   }
 
   simulate();
-
   (function(){ const e=new Event('change'); if ($('profession')) $('profession').dispatchEvent(e); if ($('microEntrepriseCheck')) $('microEntrepriseCheck').dispatchEvent(e); })();
-
   window.addEventListener('resize', simulate);
 })();
