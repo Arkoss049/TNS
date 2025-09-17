@@ -7,6 +7,30 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="style.css">
+<style>
+/* --- Correction position bulle aide micro-entreprise --- */
+.flex {
+  position: relative; /* conteneur parent pour ancrer la bulle */
+}
+
+.help-bubble {
+  position: absolute;
+  top: -100%;        /* au-dessus du bouton ? */
+  left: 0;           /* aligné à gauche du bouton */
+  background: #141a24;
+  border: 1px solid #233149;
+  padding: 8px;
+  border-radius: 8px;
+  width: max-content;
+  max-width: 260px;
+  z-index: 1000;
+  display: none;     /* caché par défaut */
+}
+
+.help[aria-expanded="true"] + .help-bubble {
+  display: block;    /* visible quand on clique sur le bouton ? */
+}
+</style>
 </head>
 <body>
 <div class="wrap">
