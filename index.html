@@ -179,8 +179,16 @@
       </div>
 
       <div class="card" style="margin-top:12px; position:relative;">
-        <div id="impact-bubble" class="impact-bubble hidden">
-          <span id="impact-text"></span>
+        <div id="impact-bubble" class="impact-bubble hidden" role="status" aria-live="polite">
+          <div class="impact-head">
+            <span id="impact-title">Impact mis à jour</span>
+            <button id="impact-close" class="impact-close" aria-label="Fermer">×</button>
+          </div>
+          <div id="impact-text" class="impact-main"></div>
+          <div id="impact-sub" class="impact-sub"></div>
+          <div class="impact-actions">
+            <label class="pin"><input id="impact-pin" type="checkbox"> Épingler</label>
+          </div>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
           <h2>2) Revenus vs Charges</h2>
