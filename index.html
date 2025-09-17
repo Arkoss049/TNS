@@ -173,23 +173,20 @@
 
     <div class="col-8">
       <div class="kpis">
-        <div class="kpi" id="kA1Avec"><h3>Revenus mensuels <b>avec Moduvéo</b></h3><div class="v" id="vA1Avec">—</div></div>
+        <div class="kpi" id="kA1Avec">
+          <h3>
+            Revenus mensuels <b>avec Moduvéo</b>
+            <span id="covDot" class="status-dot" title="Couverture"></span>
+          </h3>
+          <div class="v" id="vA1Avec">—</div>
+          <div class="small" id="vA1AvecBreak">RO ≈ — / Moduvéo ≈ —</div>
+          <div class="small" id="vA1AvecCov">Couverture : —%</div>
+        </div>
         <div class="kpi" id="kA1Reste"><h3>Reste à vivre <b>(après charges)</b></h3><div class="v" id="vA1Reste">—</div></div>
         <div class="kpi" id="kA1Sans"><h3>Manque mensuel <b>sans contrat</b></h3><div class="v" id="vA1Sans">—</div></div>
       </div>
 
-      <div class="card" style="margin-top:12px; position:relative;">
-        <div id="impact-bubble" class="impact-bubble hidden" role="status" aria-live="polite">
-          <div class="impact-head">
-            <span id="impact-title">Impact mis à jour</span>
-            <button id="impact-close" class="impact-close" aria-label="Fermer">×</button>
-          </div>
-          <div id="impact-text" class="impact-main"></div>
-          <div id="impact-sub" class="impact-sub"></div>
-          <div class="impact-actions">
-            <label class="pin"><input id="impact-pin" type="checkbox"> Épingler</label>
-          </div>
-        </div>
+      <div class="card" style="margin-top:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
           <h2>2) Revenus vs Charges</h2>
           <div class="small">Barres empilées = RO + Moduvéo • Lignes = Charges, <b>Salaire cible</b>, RO seul</div>
