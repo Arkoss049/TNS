@@ -127,9 +127,9 @@ let viewByYear=false, chartInstance=null;
 let zoomMode='full', daltonien=false;
 
 const STORAGE_KEY='simu_tns_v2.5';
-const DEFAULT_STATE={ profession:'ssi_artisan', scenario:'maladie', salaireM:'3000', chargesM:'2000', cibleM:'', cibleSame:true, carenceCreation:'0', affiliationCheck:false, microEntrepriseCheck:false, microAct:'bic_vente', microCA:'', franchiseMod:'15', plafondMod:'', ijModCustom:'', modAuto:true, horizon:'60' };
+const DEFAULT_STATE={ profession:'ssi_artisan', scenario:'maladie', salaireM:'3000', chargesM:'2000', cibleM:'', cibleSame:true, carenceCreation:'0', affiliationCheck:false, microEntrepriseCheck:false, microAct:'bic_vente', microCA:'', franchiseMod:'15', plafondMod:'', ijModCustom:'', modAuto:true, horizon:'60', arretJours: '30' };
 function loadState(){ try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return DEFAULT_STATE; return {...DEFAULT_STATE, ...JSON.parse(raw)}; }catch(e){ return DEFAULT_STATE; } }
-function saveState(){ try{ const s={ profession:I.profession?.value, scenario:I.scenario?.value, salaireM:I.salaireM?.value, chargesM:I.chargesM?.value, cibleM:I.cibleM?.value, cibleSame:!!I.cibleSame?.checked, carenceCreation:I.carenceCreation?.value, affiliationCheck:!!I.affiliationCheck?.checked, microEntrepriseCheck:!!I.microEntrepriseCheck?.checked, microAct:I.microAct?.value, microCA:I.microCA?.value, franchiseMod:I.franchiseMod?.value, plafondMod:I.plafondMod?.value, ijModCustom:I.ijModCustom?.value, modAuto:!!I.modAuto?.checked, horizon:I.horizon?.value }; localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){} }
+function saveState(){ try{ const s={ profession:I.profession?.value, scenario:I.scenario?.value, salaireM:I.salaireM?.value, chargesM:I.chargesM?.value, cibleM:I.cibleM?.value, cibleSame:!!I.cibleSame?.checked, carenceCreation:I.carenceCreation?.value, affiliationCheck:!!I.affiliationCheck?.checked, microEntrepriseCheck:!!I.microEntrepriseCheck?.checked, microAct:I.microAct?.value, microCA:I.microCA?.value, franchiseMod:I.franchiseMod?.value, plafondMod:I.plafondMod?.value, ijModCustom:I.ijModCustom?.value, modAuto:!!I.modAuto?.checked, horizon:I.horizon?.value, arretJours:I.arretJours?.value }; localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){} }
 
 /* ---------- Calculs RO / Mod ---------- */
 function ijFromFormula(name, annualRef, isMicro=false){
@@ -431,15 +431,15 @@ function simulate(){
     const affOK = !(I.affiliationCheck && I.affiliationCheck.checked);
 
     // CPAM/CAISSE phases + IJ
-    const annualRef = (parseEuro(I.salaireM?.value)||0)*12; // ou revenu micro si actif (déjà pris en compte plus haut)
-    const isMicro = I.microEntrepriseCheck && I.microEntrepriseCheck.checked;
+    const annualRefLocal = annualRef;
+    const isMicroLocal = isMicro;
 
     let cpamS=0, cpamE=0, cpamIJ=0, caisseS=0, caisseE=0, caisseIJ=0, carence=0, maxDays=360;
 
     if (roCfg.ro_kind==='pl_caisse'){
       cpamS=(roCfg.cpam?.carence_j ?? 3)+extra;
       cpamE=(roCfg.cpam?.max_j ?? 90)+extra;
-      cpamIJ=ijFromFormula(roCfg.cpam?.f || 'cpam_1_730e', annualRef, isMicro);
+      cpamIJ=ijFromFormula(roCfg.cpam?.f || 'cpam_1_730e', annualRefLocal, isMicroLocal);
       const caisse=roCfg.caisse||{};
       const isCaisseDefined = Object.keys(caisse).length>0;
       if(isCaisseDefined){
@@ -447,8 +447,8 @@ function simulate(){
         caisseE=(caisse.max_j||1095)+extra;
         if(caisse.kind==='fixed'){ caisseIJ=caisse.ij_j||0; }
         else if(caisse.kind==='piecewise'){
-          let found=null; for(const b of caisse.bands){ if(annualRef<=b.rev_max){ found=b; break; } }
-          caisseIJ = found ? (found.ij_j!==undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
+          let found=null; for(const b of caisse.bands){ if(annualRefLocal<=b.rev_max){ found=b; break; } }
+          caisseIJ = found ? (found.ij_j!==undefined ? found.ij_j : ijFromFormula(found.f, annualRefLocal, isMicroLocal)) : 0;
         }
         maxDays = Math.max(cpamE, caisseE);
       } else {
@@ -459,7 +459,7 @@ function simulate(){
       carence = (roCfg.carence_j||0)+extra;
       maxDays = (roCfg.max_j||360)+extra;
       cpamS = carence; cpamE = maxDays;
-      cpamIJ = (roCfg.ij_j ?? ijFromFormula(roCfg.f, annualRef, isMicro)) || 0;
+      cpamIJ = (roCfg.ij_j ?? ijFromFormula(roCfg.f, annualRefLocal, isMicroLocal)) || 0;
       caisseS = caisseE = 0; caisseIJ = 0;
     }
 
@@ -496,6 +496,13 @@ function simulate(){
     if($('vA1Sans')) $('vA1Sans').textContent = F0.format(perteTotale);
     // couleur du KPI droite
     if($('kA1Sans')) $('kA1Sans').className='kpi '+(perteTotale===0?'ok':'bad');
+    
+    // Bonus: Mettre à jour le libellé du KPI de droite
+    const lbl = $('kA1Sans')?.querySelector('h3');
+    if (lbl) {
+      lbl.innerHTML = `Perte de revenu <b>(total sur l’arrêt)</b> ` + 
+                      (modEnabled ? '<span class="badge">avec Moduvéo</span>' : '<span class="badge">sans Moduvéo</span>');
+    }
   })();
 }
 
@@ -750,6 +757,10 @@ function bindUI(){
   if($('arretJours')) $('arretJours').value = s.arretJours || 30;
 
   bindUI();
+  
+  // Relancer simulate() quand on change ON/OFF et le nombre de jours
+  $('modToggle')?.addEventListener('change', simulate);
+  $('arretJours')?.addEventListener('input', simulate);
 
   if ($('cibleSame')?.checked && $('cibleM')) { $('cibleM').disabled = true; }
   
