@@ -131,6 +131,40 @@ const DEFAULT_STATE={ profession:'ssi_artisan', scenario:'maladie', salaireM:'30
 function loadState(){ try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return DEFAULT_STATE; return {...DEFAULT_STATE, ...JSON.parse(raw)}; }catch(e){ return DEFAULT_STATE; } }
 function saveState(){ try{ const s={ profession:I.profession?.value, scenario:I.scenario?.value, salaireM:I.salaireM?.value, chargesM:I.chargesM?.value, cibleM:I.cibleM?.value, cibleSame:!!I.cibleSame?.checked, carenceCreation:I.carenceCreation?.value, affiliationCheck:!!I.affiliationCheck?.checked, microEntrepriseCheck:!!I.microEntrepriseCheck?.checked, microAct:I.microAct?.value, microCA:I.microCA?.value, franchiseMod:I.franchiseMod?.value, plafondMod:I.plafondMod?.value, ijModCustom:I.ijModCustom?.value, modAuto:!!I.modAuto?.checked, horizon:I.horizon?.value }; localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){} }
 
+/* ---------- Impact bubble helper ---------- */
+let impactTimer = null;
+function showImpact({ title, main, chips = [], variant = 'warn', autohide = 4000 }){
+  const wrap = $('impact-bubble'); if(!wrap) return;
+  const t = $('impact-title'), m = $('impact-text'), s = $('impact-sub');
+  const pin = $('impact-pin'), close = $('impact-close');
+
+  // contenu
+  if(t) t.textContent = title || 'Impact mis à jour';
+  if(m) m.innerHTML = main || '';
+  if(s) s.innerHTML = (chips||[]).map(c=>`<span class="impact-chip">${c}</span>`).join('');
+
+  // variantes
+  wrap.classList.remove('ok','warn','bad');
+  wrap.classList.add(variant);
+
+  // afficher
+  wrap.classList.add('show');
+  wrap.classList.remove('hidden');
+
+  // gestion fermeture
+  if(close){
+    close.onclick = () => { wrap.classList.remove('show'); };
+  }
+
+  // auto hide (sauf si épinglé)
+  if(impactTimer) { clearTimeout(impactTimer); impactTimer = null; }
+  if(autohide > 0){
+    impactTimer = setTimeout(()=>{
+      if(!(pin && pin.checked)){ wrap.classList.remove('show'); }
+    }, autohide);
+  }
+}
+
 /* ---------- Calculs RO / Mod ---------- */
 function ijFromFormula(name, annualRef, isMicro=false){
   const f=CATALOG.formulas[name];
@@ -373,6 +407,48 @@ function simulate(){
 
   renderPave(ctx, {carence, max, ijro});
   saveState();
+
+  // ---- Résumé & bulle d'impact ----
+  try {
+    const salaireM = parseEuro(I.salaireM.value)||0;
+    const chargesM = parseEuro(I.chargesM.value)||0;
+    const cibleM   = I.cibleSame.checked ? salaireM : (parseEuro(I.cibleM.value)||0);
+
+    // On se base sur la moyenne des 12 premiers mois (déjà calculée juste au-dessus)
+    // kAvec = moyenne (RO+Mod) ; kSans = moyenne RO seul
+    const A1 = Math.min(12, Math.max(1, parseInt(I.horizon.value)||60));
+    const mean = a => a.slice(0,A1).reduce((x,t)=>x+t,0)/A1;
+
+    // Reconstruire vite fait les séries alignées à ce point de simulate()
+    // => on s'appuie sur les dernières variables locales si besoin
+    // (ici on les a encore en portée : 'avec', 'sans', 'cpam', 'caissePro', 'modSeries')
+    const moyAvec = mean(avec);
+    const moySans = mean(sans);
+    const partRO  = mean(cpam) + mean(caissePro);
+    const partMod = mean(modSeries);
+
+    const resteAvec   = moyAvec - chargesM;
+    const manqueSans  = Math.max(0, chargesM - moySans);
+    const couverture  = cibleM > 0 ? Math.min(100, Math.round((moyAvec / cibleM) * 100)) : 0;
+    const variant = (resteAvec >= 0) ? 'ok' : (couverture >= 60 ? 'warn' : 'bad');
+
+    const title = (variant==='ok') ? 'Objectif atteint ✅'
+                 : (variant==='warn') ? 'Partiellement couvert ⚠️'
+                 : 'Couverture insuffisante ❌';
+
+    const main = [
+      `<b>${F0.format(moyAvec)}/mois</b> en moyenne <span class="small">(12 mois)</span>`,
+      `<br>→ <b>RO</b> ≈ ${F0.format(partRO)} / <b>Moduvéo</b> ≈ ${F0.format(partMod)}`
+    ].join('');
+
+    const chips = [
+      `Couverture : ${couverture}% du salaire cible`,
+      `Reste à vivre : ${F0.format(resteAvec)}/mois`,
+      `Sans contrat : manque ${F0.format(manqueSans)}/mois`
+    ];
+
+    showImpact({ title, main, chips, variant, autohide: 4500 });
+  } catch(e) { /* silencieux */ }
 }
 
 /* ---------- Frise + UX ---------- */
