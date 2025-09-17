@@ -1,4 +1,3 @@
-
 /* ---------- Caisses helpers ---------- */
 const same_0_eur = {
   maladie:{ ro_kind:"pl_caisse", cpam:{carence_j:3, max_j:90, f:"cpam_1_730e"}, caisse:{start_j:91, kind:"fixed", ij_j:0, max_j:1095} },
@@ -628,6 +627,36 @@ function bindUI(){
   bindUI();
 
   if ($('cibleSame')?.checked && $('cibleM')) { $('cibleM').disabled = true; }
+
+  // New logic for scenario buttons
+  const scenarioButtons = {
+    'btnMaladie30j': { scenario: 'maladie', horizon: 1, note: 'Arrêt maladie de 30 jours', carenceCreation: '0', affil: false },
+    'btnAccident45j': { scenario: 'atmp', horizon: 2, note: 'Arrêt suite à un accident, 45 jours', carenceCreation: '0', affil: false },
+    'btnHospitalisation7j': { scenario: 'maladie', horizon: 1, note: 'Hospitalisation courte, 7 jours', carenceCreation: '0', affil: false },
+    'btnBurnout90j': { scenario: 'maladie', horizon: 3, note: 'Arrêt pour burnout, 90 jours', carenceCreation: '0', affil: false },
+    'btnBlessureSport15j': { scenario: 'autre', horizon: 1, note: 'Blessure de la vie courante, 15 jours', carenceCreation: '0', affil: false },
+    'btnArretLong': { scenario: 'maladie', horizon: 12, note: 'Maladie longue durée, 1 an', carenceCreation: '0', affil: false },
+  };
+
+  for (const [id, config] of Object.entries(scenarioButtons)) {
+    const btn = document.getElementById(id);
+    if (btn) {
+      btn.addEventListener('click', () => {
+        I.scenario.value = config.scenario;
+        I.horizon.value = config.horizon;
+        I.carenceCreation.value = config.carenceCreation;
+        I.affiliationCheck.checked = config.affil;
+        
+        // Mettre à jour l'affichage avant de simuler
+        I.scenario.dispatchEvent(new Event('change'));
+        I.horizon.dispatchEvent(new Event('change'));
+        I.carenceCreation.dispatchEvent(new Event('change'));
+        I.affiliationCheck.dispatchEvent(new Event('change'));
+        
+        simulate();
+      });
+    }
+  }
 
   simulate();
 
