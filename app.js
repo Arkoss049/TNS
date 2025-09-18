@@ -609,6 +609,23 @@ function simulate(){
   if ($('bubbleAvec')) $('bubbleAvec').textContent  = ruleText(selProf, scen, annualRef, isMicro);
   if ($('bubbleReste')) $('bubbleReste').textContent = ruleText(selProf, scen, annualRef, isMicro);
   if ($('bubbleSans')) $('bubbleSans').textContent  = ruleText(selProf, scen, annualRef, isMicro);
+
+
+// --- Update encart "Règle appliquée" (Option C) ---
+(function(){
+  const el = document.getElementById('ruleText');
+  if (!el) return;
+  try {
+    const scen = document.getElementById('scenario')?.value || 'maladie';
+    // ATTENTION: selProf doit déjà être défini plus haut dans simulate()
+    const txt = ruleText(selProf, scen, typeof annualRef!=='undefined'?annualRef:0, typeof isMicro!=='undefined'?isMicro:false);
+    el.textContent = txt || 'Règle indisponible';
+  } catch (e) {
+    console.warn('ruleText update failed', e);
+    el.textContent = 'Règle indisponible';
+  }
+})();
+// --- fin update règle ---
 }
 
 /* ---------- Frise + UX ---------- */
@@ -932,3 +949,5 @@ function bindUI(){
   (function(){ const e=new Event('change'); if ($('profession')) $('profession').dispatchEvent(e); if ($('microEntrepriseCheck')) $('microEntrepriseCheck').dispatchEvent(e); })();
   window.addEventListener('resize', simulate);
 })();
+// Run simulate on first load
+document.addEventListener('DOMContentLoaded', simulate);
