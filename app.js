@@ -508,6 +508,7 @@ function simulate(){
 
     // Reprend la logique de renderPave pour connaître qui paie à J
     const profId = I.profession.value, scen = I.scenario.value;
+    // const selectedProf = CATALOG.profs.find(p=>p.id===profId);  // Ligne retirée
     if(!selectedProf) return;
     const roCfg = selectedProf.ro[scen] || {};
     const extra = Math.max(0, parseInt(I.carenceCreation?.value)||0);
@@ -604,10 +605,10 @@ function simulate(){
     }
   })();
   
-  const selectedProf = CATALOG.profs.find(p=>p.id===profId);
-  if ($('bubbleAvec')) $('bubbleAvec').textContent  = ruleText(selectedProf, scen, annualRef, isMicro);
-  if ($('bubbleReste')) $('bubbleReste').textContent = ruleText(selectedProf, scen, annualRef, isMicro);
-  if ($('bubbleSans')) $('bubbleSans').textContent  = ruleText(selectedProf, scen, annualRef, isMicro);
+  const selProf = CATALOG.profs.find(p=>p.id===profId);
+  if ($('bubbleAvec')) $('bubbleAvec').textContent  = ruleText(selProf, scen, annualRef, isMicro);
+  if ($('bubbleReste')) $('bubbleReste').textContent = ruleText(selProf, scen, annualRef, isMicro);
+  if ($('bubbleSans')) $('bubbleSans').textContent  = ruleText(selProf, scen, annualRef, isMicro);
 }
 
 /* ---------- Frise + UX ---------- */
