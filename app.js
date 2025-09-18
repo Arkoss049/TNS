@@ -267,12 +267,6 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
       caisseE = (caisse.max_j || 1095) + extra;
       if(caisse.kind === 'fixed'){
         caisseIJ = caisse.ij_j ?? 0;
-      } else if(caisse.kind === 'piecewise'){
-        let found = null;
-        for(const b of caisse.bands){
-          if(annualRef <= b.rev_max){ found = b; break; }
-        }
-        caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
       } else if(caisse.kind === 'piecewiseAge'){
         const age = parseInt(I.age?.value)||40;
         let ijBase = 0;
@@ -848,6 +842,17 @@ function bindUI(){
       }
     });
   }
+
+  ['Avec', 'Reste', 'Sans'].forEach(s => {
+    const btn = document.getElementById('help' + s);
+    if (btn) {
+      btn.addEventListener('click', () => {
+        const open = btn.getAttribute('aria-expanded') === 'true';
+        document.querySelectorAll('.help').forEach(b => b.setAttribute('aria-expanded', 'false'));
+        btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+      });
+    }
+  });
 }
 
 /* ---------- Bootstrap ---------- */
@@ -883,6 +888,7 @@ function bindUI(){
   // Relancer simulate() quand on change ON/OFF et le nombre de jours
   $('modToggle')?.addEventListener('change', simulate);
   $('arretJours')?.addEventListener('input', simulate);
+  $('age')?.addEventListener('input', simulate);
 
   if ($('cibleSame')?.checked && $('cibleM')) { $('cibleM').disabled = true; }
   
