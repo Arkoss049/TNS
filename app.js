@@ -136,9 +136,60 @@ let viewByYear=false, chartInstance=null;
 let zoomMode='full', daltonien=false;
 
 const STORAGE_KEY='simu_tns_v2.5';
-const DEFAULT_STATE={ profession:'ssi_artisan', scenario:'maladie', salaireM:'3000', chargesM:'2000', cibleM:'', cibleSame:true, carenceCreation:'0', affiliationCheck:false, microEntrepriseCheck:false, microAct:'bic_vente', microCA:'', franchiseMod:'15', plafondMod:'', ijModCustom:'', modAuto:true, horizon:'60', arretJours: '30', age: '45' };
+const DEFAULT_STATE={ profession:'ssi_artisan', scenario:'maladie', age:'45', salaireM:'3000', chargesM:'2000', cibleM:'', cibleSame:true, carenceCreation:'0', affiliationCheck:false, microEntrepriseCheck:false, microAct:'bic_vente', microCA:'', franchiseMod:'15', plafondMod:'', ijModCustom:'', modAuto:true, horizon:'60', arretJours: '30' };
 function loadState(){ try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return DEFAULT_STATE; return {...DEFAULT_STATE, ...JSON.parse(raw)}; }catch(e){ return DEFAULT_STATE; } }
 function saveState(){ try{ const s={ profession:I.profession?.value, scenario:I.scenario?.value, age:I.age?.value, salaireM:I.salaireM?.value, chargesM:I.chargesM?.value, cibleM:I.cibleM?.value, cibleSame:!!I.cibleSame?.checked, carenceCreation:I.carenceCreation?.value, affiliationCheck:!!I.affiliationCheck?.checked, microEntrepriseCheck:!!I.microEntrepriseCheck?.checked, microAct:I.microAct?.value, microCA:I.microCA?.value, franchiseMod:I.franchiseMod?.value, plafondMod:I.plafondMod?.value, ijModCustom:I.ijModCustom?.value, modAuto:!!I.modAuto?.checked, horizon:I.horizon?.value, arretJours:I.arretJours?.value }; localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){} }
+
+// Fonction pour déterminer le texte d'aide pour les règles de calcul
+function ruleText(prof, scen, annualRef, isMicro){
+  const roCfg = prof.ro[scen];
+  if(!roCfg) return "Pas de règle disponible";
+
+  const age = parseInt(document.getElementById("age")?.value || "40", 10);
+
+  if(roCfg.ro_kind === 'formula'){
+    if(roCfg.f === 'cpam_1_730e'){
+      return "CPAM : 1/730 du revenu annuel (25,80 €/j – 193,56 €/j), versée du 4e au 90e jour";
+    }
+    if(roCfg.f === 'ssi_1_730e'){
+      return "SSI : 1/730 du revenu annuel (25,80 €/j – 64,52 €/j), micro-entreprise <10 % PASS = pas d’indemnité";
+    }
+  }
+
+  if(roCfg.ro_kind === 'fixed' || roCfg.caisse?.kind === 'fixed'){
+    return `Forfait : ${roCfg.ij_j || roCfg.caisse?.ij_j} €/jour à partir du jour ${roCfg.caisse?.start_j || 91}`;
+  }
+
+  if(roCfg.ro_kind === 'pl_caisse'){
+    let txt = "CPAM : 1/730 du revenu (25,80 – 193,56 €/j) du J4 au J90";
+    if(roCfg.caisse){
+      if(roCfg.caisse.kind === 'fixed'){
+        txt += ` • ${prof.label} : forfait ${roCfg.caisse.ij_j} €/j du J${roCfg.caisse.start_j || 91} au J${roCfg.caisse.max_j || 1095}`;
+      }
+      if(roCfg.caisse.kind === 'piecewise'){
+        txt += ` • ${prof.label} : barème selon revenu (≤47 100 € = 64,52 €/j ; ≤141 300 € = 1/730 revenu ; >141 300 € = 193,56 €/j)`;
+      }
+      if(roCfg.caisse.kind === 'piecewiseAge'){
+        txt += ` • ${prof.label} : barème selon revenu (≤47 100 € = 64,52 €/j ; ≤141 300 € = 1/730 revenu ; >141 300 € = 193,56 €/j)`;
+        if(age >= 70){
+          txt += " (70 ans et plus : 50 % du barème)";
+        } else if(age >= 62){
+          txt += " (62–69 ans : 1ʳᵉ année = 100 %, 2ᵉ = 75 %, 3ᵉ = 50 %)";
+        } else {
+          txt += " (<62 ans : taux plein)";
+        }
+      }
+      if(roCfg.caisse.kind === 'piecewise_j'){
+        txt += " • Montant variable selon la durée de l’arrêt (ex. 25,79 €/j jusqu’au J28 puis 34,39 €/j)";
+      }
+    } else {
+      txt += " • pas de couverture après J90";
+    }
+    return txt;
+  }
+
+  return "Règle non définie";
+}
 
 
 /* ---------- Calculs RO / Mod ---------- */
@@ -166,7 +217,7 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
   }
 
   annualRef = (annualRef||0); 
-  const extra = Math.max(0, parseInt(carenceCreation)||0); 
+  const extra = Math.max(0, parseInt(I.carenceCreation?.value)||0); 
   const roConfig = cfg; 
   const hasCpam = (roConfig.cpam != null);
 
@@ -216,8 +267,14 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
       caisseE = (caisse.max_j || 1095) + extra;
       if(caisse.kind === 'fixed'){
         caisseIJ = caisse.ij_j ?? 0;
+      } else if(caisse.kind === 'piecewise'){
+        let found = null;
+        for(const b of caisse.bands){
+          if(annualRef <= b.rev_max){ found = b; break; }
+        }
+        caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
       } else if(caisse.kind === 'piecewiseAge'){
-        const age = parseInt(I.age?.value)||40; // par défaut 40 ans
+        const age = parseInt(I.age?.value)||40;
         let ijBase = 0;
         let found = null;
         for(const b of caisse.bands){
@@ -253,6 +310,7 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
 
   return { roM:0, roIJj:0, carence:0, max:0, warn:true, cpamM:0, caisseProM:0 };
 }
+
 
 /* ---------- Chart ---------- */
 function aggregateYearly(series, months){ const years=Math.ceil(months/12); const out=new Array(years).fill(0); for(let y=0;y<years;y++){ const s=y*12, e=Math.min((y+1)*12, months); const slice=series.slice(s,e); out[y]=slice.length? slice.reduce((a,b)=>a+b,0)/slice.length : 0; } return out; }
@@ -481,13 +539,16 @@ function simulate(){
              if(age >= 70){
                caisseIJ = ijBase * 0.5;
              } else if(age >= 62){
-               if(jours < 365){ caisseIJ = ijBase; }
-               else if(jours < 730){ caisseIJ = ijBase * 0.75; }
+               if(jours <= 365){ caisseIJ = ijBase; }
+               else if(jours <= 730){ caisseIJ = ijBase * 0.75; }
                else { caisseIJ = ijBase * 0.5; }
              } else {
                caisseIJ = ijBase;
              }
           }
+        } else if(caisse.kind==='piecewise'){
+          let found=null; for(const b of caisse.bands){ if(annualRefLocal<=b.rev_max){ found=b; break; } }
+          caisseIJ = found ? (found.ij_j!==undefined ? found.ij_j : ijFromFormula(found.f, annualRefLocal, isMicroLocal)) : 0;
         }
         maxDays = Math.max(cpamE, caisseE);
       } else {
@@ -543,6 +604,11 @@ function simulate(){
                       (modEnabled ? '<span class="badge">avec Moduvéo</span>' : '<span class="badge">sans Moduvéo</span>');
     }
   })();
+  
+  const selectedProf = CATALOG.profs.find(p=>p.id===profId);
+  if ($('bubbleAvec')) $('bubbleAvec').textContent  = ruleText(selectedProf, scen, annualRef, isMicro);
+  if ($('bubbleReste')) $('bubbleReste').textContent = ruleText(selectedProf, scen, annualRef, isMicro);
+  if ($('bubbleSans')) $('bubbleSans').textContent  = ruleText(selectedProf, scen, annualRef, isMicro);
 }
 
 /* ---------- Frise + UX ---------- */
@@ -599,6 +665,10 @@ function renderPave(ctx, meta){
              caisseIJ = ijBase;
            }
         }
+      } else if(caisse.kind === 'piecewise'){
+        let found = null;
+        for(const b of caisse.bands){ if(annualRef <= b.rev_max){ found = b; break; } }
+        caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
       }
     } else { caisseS = cpamE + 1; caisseE = cpamE; caisseIJ = 0; }
   } else {
@@ -703,7 +773,7 @@ function renderPave(ctx, meta){
 /* ---------- UI ---------- */
 function initProf(){ if(!$('profession')) return; $('profession').innerHTML = CATALOG.profs.map(p=>`<option value="${p.id}">${p.label}</option>`).join(''); }
 function bindUI(){
-  const ids=['profession','scenario','salaireM','chargesM','carenceCreation','affiliation-check','microEntrepriseCheck','franchiseMod','plafondMod','ijModCustom','modAuto','horizon','cibleM','cibleSame','modToggle','daltoToggle','zoom180','zoomFull','arretJours'];
+  const ids=['profession','scenario','age','salaireM','chargesM','carenceCreation','affiliation-check','microEntrepriseCheck','franchiseMod','plafondMod','ijModCustom','modAuto','horizon','cibleM','cibleSame','modToggle','daltoToggle','zoom180','zoomFull','arretJours'];
   ids.forEach(id=>{
     const el=$(id); if(!el) return;
     el.addEventListener('input', simulate);
@@ -786,9 +856,9 @@ function bindUI(){
   const s=loadState();
   if($('profession')) $('profession').value = s.profession;
   if($('scenario'))   $('scenario').value   = s.scenario;
+  if($('age'))        $('age').value        = s.age;
   if($('salaireM'))   $('salaireM').value   = s.salaireM;
   if($('chargesM'))   $('chargesM').value   = s.chargesM;
-  if($('age'))        $('age').value        = s.age;
 
   if($('cibleM'))     $('cibleM').value     = s.cibleM || s.salaireM;
   if($('cibleSame'))  $('cibleSame').checked = s.cibleSame;
