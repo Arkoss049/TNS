@@ -508,6 +508,7 @@ function simulate(){
 
     // Reprend la logique de renderPave pour connaître qui paie à J
     const profId = I.profession.value, scen = I.scenario.value;
+    // const selectedProf = CATALOG.profs.find(p=>p.id===profId);  // Ligne retirée
     if(!selectedProf) return;
     const roCfg = selectedProf.ro[scen] || {};
     const extra = Math.max(0, parseInt(I.carenceCreation?.value)||0);
