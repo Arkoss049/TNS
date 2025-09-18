@@ -142,54 +142,90 @@ function saveState(){ try{ const s={ profession:I.profession?.value, scenario:I.
 
 // Fonction pour déterminer le texte d'aide pour les règles de calcul
 function ruleText(prof, scen, annualRef, isMicro){
+  if(!prof || !prof.ro) return "Règle indisponible";
   const roCfg = prof.ro[scen];
-  if(!roCfg) return "Pas de règle disponible";
+  if(!roCfg) return "Règle indisponible";
 
   const age = parseInt(document.getElementById("age")?.value || "40", 10);
+  const F2loc = new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:2});
+  const part = [];
 
+  // Helpers
+  const fmtBandByAge = (ijBase) => {
+    if(age >= 70) return F2loc.format(ijBase*0.5) + "/j (70+ : 50 %)";
+    if(age >= 62) return F2loc.format(ijBase) + "/j (62–69 : 100 % an 1, 75 % an 2, 50 % an 3)";
+    return F2loc.format(ijBase) + "/j (<62 ans : taux plein)";
+  };
+  const caisseName = prof.label && /\((.*?)\)/.test(prof.label) ? (prof.label.match(/\((.*?)\)/)[1]) : "Caisse pro";
+
+  // 1) Cas “PL + caisse pro” : on affiche toujours CPAM + Caisse (si définie)
+  if(roCfg.ro_kind === 'pl_caisse'){
+    // CPAM
+    const cpamCar = (roCfg.cpam?.carence_j ?? 3);
+    const cpamMax = (roCfg.cpam?.max_j ?? 90);
+    const cpamIJ  = ijFromFormula(roCfg.cpam?.f || 'cpam_1_730e', annualRef||0, !!isMicro);
+    part.push(`CPAM : J${cpamCar+1}–J${cpamMax} • ≈ ${F2loc.format(cpamIJ)}/j (1/730 du revenu, min 25,80 € – max 193,56 €)`);
+
+    // Caisse pro (si présente)
+    const C = roCfg.caisse || null;
+    if(C){
+      const start = C.start_j || 91;
+      const end   = C.max_j   || 1095;
+
+      if(C.kind === 'fixed'){
+        part.push(`${caisseName} : J${start}–J${end} • ≈ ${F2loc.format(C.ij_j||0)}/j (forfait)`);
+      } else if (C.kind === 'piecewise'){
+        // barème par revenu
+        let found = null;
+        for(const b of (C.bands||[])){ if((annualRef||0) <= b.rev_max){ found=b; break; } }
+        const ij = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef||0, !!isMicro)) : 0;
+        part.push(`${caisseName} : J${start}–J${end} • ≈ ${F2loc.format(ij)}/j (barème selon revenu)`);
+      } else if (C.kind === 'piecewiseAge'){
+        // barème par revenu + décote liée à l'âge (ex. CARMF)
+        let found=null;
+        for(const b of (C.bands||[])){ if((annualRef||0) <= b.rev_max){ found=b; break; } }
+        let ijBase = 0;
+        if(found){
+          ijBase = (found.base !== undefined) ? found.base : ijFromFormula(found.f, annualRef||0, !!isMicro);
+        }
+        part.push(`${caisseName} : J${start}–J${end} • ≈ ${fmtBandByAge(ijBase)} (barème selon revenu)`);
+      } else {
+        // Type inconnu → on affiche juste les bornes
+        part.push(`${caisseName} : J${start}–J${end}`);
+      }
+    } else {
+      part.push(`Après J${cpamMax} : pas de couverture caisse pro`);
+    }
+
+    return part.join(" • ");
+  }
+
+  // 2) Cas “formula” (SSI, etc.)
   if(roCfg.ro_kind === 'formula'){
     if(roCfg.f === 'cpam_1_730e'){
       return "CPAM : 1/730 du revenu annuel (25,80 €/j – 193,56 €/j), versée du 4e au 90e jour";
     }
     if(roCfg.f === 'ssi_1_730e'){
-      return "SSI : 1/730 du revenu annuel (25,80 €/j – 64,52 €/j), micro-entreprise <10 % PASS = pas d’indemnité";
+      const ij = ijFromFormula('ssi_1_730e', annualRef||0, !!isMicro);
+      const microHint = (isMicro ? " • micro <10 % PASS ⇒ 0 €" : "");
+      return `SSI : ≈ ${F2loc.format(ij)}/j (1/730 du revenu, min 25,80 € – max 64,52 €)${microHint}`;
     }
+    // fallback
+    const ij = ijFromFormula(roCfg.f, annualRef||0, !!isMicro);
+    return `RO : ≈ ${F2loc.format(ij)}/j (1/730 du revenu)`;
   }
 
-  if(roCfg.ro_kind === 'fixed' || roCfg.caisse?.kind === 'fixed'){
-    return `Forfait : ${roCfg.ij_j || roCfg.caisse?.ij_j} €/jour à partir du jour ${roCfg.caisse?.start_j || 91}`;
+  // 3) Cas “fixed” (ex. Avocats CNBF) : pas de CPAM
+  if(roCfg.ro_kind === 'fixed'){
+    const ij = roCfg.ij_j ?? 0;
+    const car = roCfg.carence_j || 0;
+    const max = roCfg.max_j || 360;
+    return `RO (forfait) : J${car+1}–J${max} • ≈ ${F2loc.format(ij)}/j`;
   }
 
-  if(roCfg.ro_kind === 'pl_caisse'){
-    let txt = "CPAM : 1/730 du revenu (25,80 – 193,56 €/j) du J4 au J90";
-    if(roCfg.caisse){
-      if(roCfg.caisse.kind === 'fixed'){
-        txt += ` • ${prof.label} : forfait ${roCfg.caisse.ij_j} €/j du J${roCfg.caisse.start_j || 91} au J${roCfg.caisse.max_j || 1095}`;
-      }
-      if(roCfg.caisse.kind === 'piecewise'){
-        txt += ` • ${prof.label} : barème selon revenu (≤47 100 € = 64,52 €/j ; ≤141 300 € = 1/730 revenu ; >141 300 € = 193,56 €/j)`;
-      }
-      if(roCfg.caisse.kind === 'piecewiseAge'){
-        txt += ` • ${prof.label} : barème selon revenu (≤47 100 € = 64,52 €/j ; ≤141 300 € = 1/730 revenu ; >141 300 € = 193,56 €/j)`;
-        if(age >= 70){
-          txt += " (70 ans et plus : 50 % du barème)";
-        } else if(age >= 62){
-          txt += " (62–69 ans : 1ʳᵉ année = 100 %, 2ᵉ = 75 %, 3ᵉ = 50 %)";
-        } else {
-          txt += " (<62 ans : taux plein)";
-        }
-      }
-      if(roCfg.caisse.kind === 'piecewise_j'){
-        txt += " • Montant variable selon la durée de l’arrêt (ex. 25,79 €/j jusqu’au J28 puis 34,39 €/j)";
-      }
-    } else {
-      txt += " • pas de couverture après J90";
-    }
-    return txt;
-  }
-
-  return "Règle non définie";
+  return "Règle indisponible";
 }
+
 
 
 /* ---------- Calculs RO / Mod ---------- */
