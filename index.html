@@ -6,8 +6,20 @@
   <title>Simulateur TNS — Régime obligatoire + Moduvéo PRO</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <!-- IMPORTANT: utilise le vrai nom sur GitHub -->
+  <!-- Feuille de style principale -->
   <link rel="stylesheet" href="style.css">
+  <!-- Style local pour l'encart règle (Option C) -->
+  <style>
+    .rule-box {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: #101725;
+      border: 1px solid #2a3b58;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #cfe1f7;
+    }
+  </style>
 </head>
 <body>
 <div class="wrap">
@@ -24,9 +36,10 @@
   </div>
 
   <div class="grid cols">
-    <!-- Colonne paramètres -->
+    <!-- Colonne paramètres (gauche) -->
     <div class="card col-4">
       <h2>1) Paramètres RDV</h2>
+
       <label>Profession / Caisse</label>
       <select id="profession">
         <option value="lib_nr">Profession libérale non réglementée (URSSAF)</option>
@@ -71,7 +84,7 @@
           <input id="carenceCreation" inputmode="numeric" value="0"/>
           <div class="hint">Ex : SSI maladie : droits après 1 an d’affiliation ⇒ saisir ~365 j.</div>
         </div>
-        <div class="card" style="margin-top:6px; display:none" id="micro-entreprise-block">
+        <div class="card" style="margin-top:6px" id="micro-entreprise-block">
           <div class="flex" style="align-items:center; gap:12px; flex-wrap:wrap">
             <label style="margin:0">
               <input type="checkbox" id="microEntrepriseCheck" /> Micro-entreprise
@@ -158,38 +171,29 @@
     <div class="col-8">
       <div class="kpis">
         <div class="kpi" id="kA1Avec">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <h3>Revenus mensuels <b>avec Moduvéo</b></h3>
-            <button type="button" class="help" id="helpAvec" title="Règle de calcul">?</button>
-            <div class="help-bubble" id="bubbleAvec">Règle de calcul : —</div>
-          </div>
+          <h3>Revenus mensuels <b>avec Moduvéo</b></h3>
           <div class="v" id="vA1Avec">—</div>
           <div class="small" id="vA1AvecBreak">RO ≈ — / Moduvéo ≈ —</div>
           <div class="small" id="vA1AvecCov">Couverture : —%</div>
         </div>
 
         <div class="kpi" id="kA1Reste">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <h3>Reste à vivre <b>(après charges)</b></h3>
-            <button type="button" class="help" id="helpReste" title="Règle de calcul">?</button>
-            <div class="help-bubble" id="bubbleReste">Règle de calcul : —</div>
-          </div>
+          <h3>Reste à vivre <b>(après charges)</b></h3>
           <div class="v" id="vA1Reste">—</div>
           <div class="small" id="vPerteMensuelle">Perte de salaire : —/mois</div>
         </div>
 
         <div class="kpi" id="kA1Sans">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <h3>Perte de revenu <b>(total sur l’arrêt)</b></h3>
-            <button type="button" class="help" id="helpSans" title="Règle de calcul">?</button>
-            <div class="help-bubble" id="bubbleSans">Règle de calcul : —</div>
-          </div>
+          <h3>Perte de revenu <b>(total sur l’arrêt)</b></h3>
           <div class="v" id="vA1Sans">—</div>
           <div class="small">
             Sur <input id="arretJours" type="number" min="1" value="30" style="width:80px"> jours d’arrêt
           </div>
         </div>
       </div>
+
+      <!-- Encart unique : règle appliquée (Option C) -->
+      <div class="rule-box">Règle appliquée : <span id="ruleText">—</span></div>
 
       <div class="card" style="margin-top:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
@@ -250,23 +254,10 @@
   </div>
 </div>
 
-<!-- IMPORTANT : ajuste le nom si ton fichier JS s’appelle apppp.js -->
-<script src="app.js"></script>
+<!-- IMPORTANT : ton fichier JS s'appelle 'apppp.js' -->
+<script src="apppp.js"></script>
 <script>
-// Toggle des bulles "?" via la classe .open (conforme à style.css)
-['Avec','Reste','Sans'].forEach(id=>{
-  const btn = document.getElementById('help'+id);
-  const bubble = document.getElementById('bubble'+id);
-  if(btn && bubble){
-    btn.addEventListener('click', (e)=>{
-      const open = btn.classList.contains('open');
-      document.querySelectorAll('.help').forEach(b=>b.classList.remove('open'));
-      if(!open) btn.classList.add('open');
-      e.stopPropagation();
-    });
-  }
-});
-// Bulle micro-entreprise
+// Micro-entreprise : toggle de la bulle d'aide (facultatif)
 (function(){
   const btn = document.getElementById('microHelp');
   const bubble = document.getElementById('microHelpBubble');
@@ -279,7 +270,7 @@
     });
   }
 })();
-// Fermer en cliquant ailleurs
+// Fermer les bulles si clic ailleurs
 document.addEventListener('click', ()=>{
   document.querySelectorAll('.help').forEach(b=>b.classList.remove('open'));
 });
