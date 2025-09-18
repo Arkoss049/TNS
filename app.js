@@ -606,9 +606,9 @@ function simulate(){
   })();
   
   const selProf = CATALOG.profs.find(p=>p.id===profId);
-  const selProf = CATALOG.profs.find(p=>p.id===profId);
-const ruleEl = $('ruleText');
-if (ruleEl) { ruleEl.textContent = ruleText(selProf, scen, annualRef, isMicro); }
+  if ($('bubbleAvec')) $('bubbleAvec').textContent  = ruleText(selProf, scen, annualRef, isMicro);
+  if ($('bubbleReste')) $('bubbleReste').textContent = ruleText(selProf, scen, annualRef, isMicro);
+  if ($('bubbleSans')) $('bubbleSans').textContent  = ruleText(selProf, scen, annualRef, isMicro);
 }
 
 /* ---------- Frise + UX ---------- */
@@ -932,6 +932,3 @@ function bindUI(){
   (function(){ const e=new Event('change'); if ($('profession')) $('profession').dispatchEvent(e); if ($('microEntrepriseCheck')) $('microEntrepriseCheck').dispatchEvent(e); })();
   window.addEventListener('resize', simulate);
 })();
-
-// Trigger simulate() when age changes
-document.getElementById('age')?.addEventListener('input', simulate);
