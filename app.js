@@ -34,17 +34,26 @@ const CATALOG = {
 
     { id:"lib_carmf", label:"Médecin (CARMF)", ro:{
       maladie:{ ro_kind:"pl_caisse", cpam:{carence_j:3, max_j:90, f:"cpam_1_730e"},
-        caisse:{start_j:91, kind:"piecewise",
-          bands:[ {rev_max:47100, ij_j:64.52}, {rev_max:141300, f:"cpam_1_730e"}, {rev_max:Infinity, ij_j:193.56} ],
-          max_j:1095 } },
+        caisse:{start_j:91, kind:"piecewiseAge", max_j:1095,
+          bands:[
+            {rev_max:47100, base:64.52},
+            {rev_max:141300, f:"cpam_1_730e"},
+            {rev_max:Infinity, base:193.56}
+          ] } },
       atmp:{ ro_kind:"pl_caisse", cpam:{carence_j:3, max_j:90, f:"cpam_1_730e"},
-        caisse:{start_j:91, kind:"piecewise",
-          bands:[ {rev_max:47100, ij_j:64.52}, {rev_max:141300, f:"cpam_1_730e"}, {rev_max:Infinity, ij_j:193.56} ],
-          max_j:1095 } },
+        caisse:{start_j:91, kind:"piecewiseAge", max_j:1095,
+          bands:[
+            {rev_max:47100, base:64.52},
+            {rev_max:141300, f:"cpam_1_730e"},
+            {rev_max:Infinity, base:193.56}
+          ] } },
       autre:{ ro_kind:"pl_caisse", cpam:{carence_j:3, max_j:90, f:"cpam_1_730e"},
-        caisse:{start_j:91, kind:"piecewise",
-          bands:[ {rev_max:47100, ij_j:64.52}, {rev_max:141300, f:"cpam_1_730e"}, {rev_max:Infinity, ij_j:193.56} ],
-          max_j:1095 } }
+        caisse:{start_j:91, kind:"piecewiseAge", max_j:1095,
+          bands:[
+            {rev_max:47100, base:64.52},
+            {rev_max:141300, f:"cpam_1_730e"},
+            {rev_max:Infinity, base:193.56}
+          ] } }
     }},
 
     { id:"lib_carpimko", label:"Paramédical (CARPIMKO)", ro:{
@@ -106,7 +115,7 @@ function currentIJjForMonth(m, cpam_c, cpamMax, cpamIJ, caisseStart, caisseIJ){
 
 /* ---------- État & persistance ---------- */
 const I={
-  profession:$('profession'), scenario:$('scenario'),
+  profession:$('profession'), scenario:$('scenario'), age:$('age'),
   salaireM:$('salaireM'), chargesM:$('chargesM'),
   cibleM:$('cibleM'), cibleSame:$('cibleSame'),
   carenceCreation:$('carenceCreation'),
@@ -127,9 +136,10 @@ let viewByYear=false, chartInstance=null;
 let zoomMode='full', daltonien=false;
 
 const STORAGE_KEY='simu_tns_v2.5';
-const DEFAULT_STATE={ profession:'ssi_artisan', scenario:'maladie', salaireM:'3000', chargesM:'2000', cibleM:'', cibleSame:true, carenceCreation:'0', affiliationCheck:false, microEntrepriseCheck:false, microAct:'bic_vente', microCA:'', franchiseMod:'15', plafondMod:'', ijModCustom:'', modAuto:true, horizon:'60', arretJours: '30' };
+const DEFAULT_STATE={ profession:'ssi_artisan', scenario:'maladie', salaireM:'3000', chargesM:'2000', cibleM:'', cibleSame:true, carenceCreation:'0', affiliationCheck:false, microEntrepriseCheck:false, microAct:'bic_vente', microCA:'', franchiseMod:'15', plafondMod:'', ijModCustom:'', modAuto:true, horizon:'60', arretJours: '30', age: '45' };
 function loadState(){ try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return DEFAULT_STATE; return {...DEFAULT_STATE, ...JSON.parse(raw)}; }catch(e){ return DEFAULT_STATE; } }
-function saveState(){ try{ const s={ profession:I.profession?.value, scenario:I.scenario?.value, salaireM:I.salaireM?.value, chargesM:I.chargesM?.value, cibleM:I.cibleM?.value, cibleSame:!!I.cibleSame?.checked, carenceCreation:I.carenceCreation?.value, affiliationCheck:!!I.affiliationCheck?.checked, microEntrepriseCheck:!!I.microEntrepriseCheck?.checked, microAct:I.microAct?.value, microCA:I.microCA?.value, franchiseMod:I.franchiseMod?.value, plafondMod:I.plafondMod?.value, ijModCustom:I.ijModCustom?.value, modAuto:!!I.modAuto?.checked, horizon:I.horizon?.value, arretJours:I.arretJours?.value }; localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){} }
+function saveState(){ try{ const s={ profession:I.profession?.value, scenario:I.scenario?.value, age:I.age?.value, salaireM:I.salaireM?.value, chargesM:I.chargesM?.value, cibleM:I.cibleM?.value, cibleSame:!!I.cibleSame?.checked, carenceCreation:I.carenceCreation?.value, affiliationCheck:!!I.affiliationCheck?.checked, microEntrepriseCheck:!!I.microEntrepriseCheck?.checked, microAct:I.microAct?.value, microCA:I.microCA?.value, franchiseMod:I.franchiseMod?.value, plafondMod:I.plafondMod?.value, ijModCustom:I.ijModCustom?.value, modAuto:!!I.modAuto?.checked, horizon:I.horizon?.value, arretJours:I.arretJours?.value }; localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){} }
+
 
 /* ---------- Calculs RO / Mod ---------- */
 function ijFromFormula(name, annualRef, isMicro=false){
@@ -206,12 +216,28 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
       caisseE = (caisse.max_j || 1095) + extra;
       if(caisse.kind === 'fixed'){
         caisseIJ = caisse.ij_j ?? 0;
-      } else if(caisse.kind === 'piecewise'){
+      } else if(caisse.kind === 'piecewiseAge'){
+        const age = parseInt(I.age?.value)||40; // par défaut 40 ans
+        let ijBase = 0;
         let found = null;
         for(const b of caisse.bands){
           if(annualRef <= b.rev_max){ found = b; break; }
         }
-        caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
+        if(found){
+          ijBase = found.base !== undefined 
+                     ? found.base 
+                     : ijFromFormula(found.f, annualRef, isMicro);
+          
+          if(age >= 70){
+            caisseIJ = ijBase * 0.5;
+          } else if(age >= 62){
+            if(m < 12){ caisseIJ = ijBase; }
+            else if(m < 24){ caisseIJ = ijBase * 0.75; }
+            else { caisseIJ = ijBase * 0.5; }
+          } else {
+            caisseIJ = ijBase;
+          }
+        }
       }
     } else {
       caisseS = cpamMax + 1;
@@ -446,9 +472,22 @@ function simulate(){
         caisseS=(caisse.start_j||91)+extra;
         caisseE=(caisse.max_j||1095)+extra;
         if(caisse.kind==='fixed'){ caisseIJ=caisse.ij_j||0; }
-        else if(caisse.kind==='piecewise'){
+        else if(caisse.kind==='piecewiseAge'){
+          const age = parseInt(I.age?.value)||40;
+          let ijBase = 0;
           let found=null; for(const b of caisse.bands){ if(annualRefLocal<=b.rev_max){ found=b; break; } }
-          caisseIJ = found ? (found.ij_j!==undefined ? found.ij_j : ijFromFormula(found.f, annualRefLocal, isMicroLocal)) : 0;
+          if(found){
+             ijBase = found.base !== undefined ? found.base : ijFromFormula(found.f, annualRefLocal, isMicroLocal);
+             if(age >= 70){
+               caisseIJ = ijBase * 0.5;
+             } else if(age >= 62){
+               if(jours < 365){ caisseIJ = ijBase; }
+               else if(jours < 730){ caisseIJ = ijBase * 0.75; }
+               else { caisseIJ = ijBase * 0.5; }
+             } else {
+               caisseIJ = ijBase;
+             }
+          }
         }
         maxDays = Math.max(cpamE, caisseE);
       } else {
@@ -544,10 +583,22 @@ function renderPave(ctx, meta){
       caisseS = (caisse.start_j || 91) + extra;
       caisseE = (caisse.max_j || 1095) + extra;
       if(caisse.kind === 'fixed'){ caisseIJ = caisse.ij_j ?? 0; }
-      else if(caisse.kind === 'piecewise'){
+      else if(caisse.kind === 'piecewiseAge'){
+        const age = parseInt(I.age?.value)||40;
+        let ijBase = 0;
         let found = null;
         for(const b of caisse.bands){ if(annualRef <= b.rev_max){ found = b; break; } }
-        caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
+        if(found){
+           ijBase = found.base !== undefined ? found.base : ijFromFormula(found.f, annualRef, isMicro);
+           if(age >= 70){
+             caisseIJ = ijBase * 0.5;
+           } else if(age >= 62){
+             // Cette logique n'est pas mensuelle, la bonne logique est dans simulate()
+             caisseIJ = ijBase;
+           } else {
+             caisseIJ = ijBase;
+           }
+        }
       }
     } else { caisseS = cpamE + 1; caisseE = cpamE; caisseIJ = 0; }
   } else {
@@ -737,6 +788,7 @@ function bindUI(){
   if($('scenario'))   $('scenario').value   = s.scenario;
   if($('salaireM'))   $('salaireM').value   = s.salaireM;
   if($('chargesM'))   $('chargesM').value   = s.chargesM;
+  if($('age'))        $('age').value        = s.age;
 
   if($('cibleM'))     $('cibleM').value     = s.cibleM || s.salaireM;
   if($('cibleSame'))  $('cibleSame').checked = s.cibleSame;
