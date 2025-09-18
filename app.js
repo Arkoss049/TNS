@@ -289,6 +289,12 @@ function computeROMonth(m, prof, scen, annualRef, carenceCreation, isAffiliation
             caisseIJ = ijBase;
           }
         }
+      } else if(caisse.kind === 'piecewise'){
+        let found = null;
+        for(const b of caisse.bands){
+          if(annualRef <= b.rev_max){ found = b; break; }
+        }
+        caisseIJ = found ? (found.ij_j !== undefined ? found.ij_j : ijFromFormula(found.f, annualRef, isMicro)) : 0;
       }
     } else {
       caisseS = cpamMax + 1;
@@ -845,11 +851,23 @@ function bindUI(){
 
   ['Avec', 'Reste', 'Sans'].forEach(s => {
     const btn = document.getElementById('help' + s);
-    if (btn) {
-      btn.addEventListener('click', () => {
-        const open = btn.getAttribute('aria-expanded') === 'true';
+    const bubble = document.getElementById('bubble' + s);
+    if(btn && bubble){
+      btn.addEventListener('click', ()=>{
+        const isOpen = btn.getAttribute('aria-expanded') === 'true';
+        document.querySelectorAll('.help-bubble').forEach(b => b.style.display = 'none');
         document.querySelectorAll('.help').forEach(b => b.setAttribute('aria-expanded', 'false'));
-        btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+        if (!isOpen) {
+          btn.setAttribute('aria-expanded', 'true');
+          bubble.style.display = 'block';
+        }
+      });
+      // Click outside to close
+      document.addEventListener('click', (e) => {
+          if (!btn.contains(e.target) && !bubble.contains(e.target)) {
+              btn.setAttribute('aria-expanded', 'false');
+              bubble.style.display = 'none';
+          }
       });
     }
   });
