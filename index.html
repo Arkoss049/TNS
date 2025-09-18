@@ -179,21 +179,27 @@
     <div class="col-8">
       <div class="kpis">
         <div class="kpi" id="kA1Avec">
-          <h3>
-            Revenus mensuels <b>avec Moduvéo</b>
-            <span id="covDot" class="status-dot" title="Couverture"></span>
-          </h3>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h3>Revenus mensuels <b>avec Moduvéo</b></h3>
+            <button type="button" class="help" id="helpAvec" aria-expanded="false" aria-controls="bubbleAvec" title="Règle de calcul">?</button>
+          </div>
           <div class="v" id="vA1Avec">—</div>
           <div class="small" id="vA1AvecBreak">RO ≈ — / Moduvéo ≈ —</div>
           <div class="small" id="vA1AvecCov">Couverture : —%</div>
         </div>
         <div class="kpi" id="kA1Reste">
-          <h3>Reste à vivre <b>(après charges)</b></h3>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h3>Reste à vivre <b>(après charges)</b></h3>
+            <button type="button" class="help" id="helpReste" aria-expanded="false" aria-controls="bubbleReste" title="Règle de calcul">?</button>
+          </div>
           <div class="v" id="vA1Reste">—</div>
           <div class="small" id="vPerteMensuelle">Perte de salaire : —/mois</div>
         </div>
         <div class="kpi" id="kA1Sans">
-          <h3>Perte de revenu <b>(total sur l’arrêt)</b></h3>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h3>Perte de revenu <b>(total sur l’arrêt)</b></h3>
+            <button type="button" class="help" id="helpSans" aria-expanded="false" aria-controls="bubbleSans" title="Règle de calcul">?</button>
+          </div>
           <div class="v" id="vA1Sans">—</div>
           <div class="small">
             Sur
@@ -260,7 +266,6 @@
     </div>
   </div>
 </div>
-
 <script src="app.js"></script>
 </body>
 </html>
