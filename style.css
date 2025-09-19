@@ -163,3 +163,24 @@ canvas{width:100%!important;height:440px!important;background:#0b0f18;border:1px
 .status-dot.ok { background:#80f2a1; border-color:#2b5b3a; }
 .status-dot.warn { background:#ffd166; border-color:#5a4b23; }
 .status-dot.bad { background:#ff7b7b; border-color:#5a2323; }
+
+/* Positionner la bulle au-dessus du ? micro */
+#microHelp {
+  position: relative; /* ancre le contexte */
+}
+
+#microHelpBubble {
+  top: auto !important;
+  bottom: 125%;   /* au-dessus du bouton */
+  right: 0;
+}
+
+#microHelpBubble::after {
+  content: "";
+  position: absolute;
+  top: 100%; /* flèche en bas de la bulle */
+  right: 8px;
+  border-width: 6px;
+  border-style: solid;
+  border-color: #0f1625 transparent transparent transparent; /* pointe vers le bas */
+}
