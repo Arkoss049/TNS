@@ -4,11 +4,15 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Simulateur TNS — Régime obligatoire + Moduvéo PRO</title>
+
+  <!-- Fonts & libs -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <!-- Feuille de style principale -->
+
+  <!-- Styles -->
   <link rel="stylesheet" href="style.css">
-  <!-- Style local pour l'encart règle (Option C) -->
+
+  <!-- Style local pour l’encart "règle appliquée" -->
   <style>
     .rule-box {
       margin-top: 10px;
@@ -23,10 +27,13 @@
 </head>
 <body>
 <div class="wrap">
+  <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
     <div>
       <h1>Régime obligatoire + Moduvéo PRO = Salaire reconstitué</h1>
-      <div class="hint">Sélectionne la <b>profession / caisse</b> • calcule automatiquement les <b>IJ RO</b> • Moduvéo complète pour atteindre le <b>salaire cible</b>.</div>
+      <div class="hint">
+        Sélectionne la <b>profession / caisse</b> • calcule automatiquement les <b>IJ RO</b> • Moduvéo complète pour atteindre le <b>salaire cible</b>.
+      </div>
     </div>
     <div class="toolbar">
       <button id="btnSave" class="btn">💾 Sauver</button>
@@ -36,7 +43,7 @@
   </div>
 
   <div class="grid cols">
-    <!-- Colonne paramètres (gauche) -->
+    <!-- Colonne gauche : paramètres -->
     <div class="card col-4">
       <h2>1) Paramètres RDV</h2>
 
@@ -84,12 +91,15 @@
           <input id="carenceCreation" inputmode="numeric" value="0"/>
           <div class="hint">Ex : SSI maladie : droits après 1 an d’affiliation ⇒ saisir ~365 j.</div>
         </div>
+
+        <!-- Bloc micro-entreprise -->
         <div class="card" style="margin-top:6px" id="micro-entreprise-block">
           <div class="flex" style="align-items:center; gap:12px; flex-wrap:wrap">
             <label style="margin:0">
               <input type="checkbox" id="microEntrepriseCheck" /> Micro-entreprise
             </label>
 
+            <!-- Bouton aide + bulle (gérés par app.js et .help.open + .help-bubble) -->
             <button type="button" class="help" id="microHelp" title="Informations micro-entreprise">?</button>
             <div class="help-bubble" id="microHelpBubble" role="dialog" aria-label="Aide micro-entreprise">
               <div><b>Conversion automatique</b> : CA × coef. forfait</div>
@@ -126,6 +136,7 @@
             <input id="plafondMod" inputmode="decimal" placeholder="ex: 320"/>
           </div>
         </div>
+
         <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:6px">
           <div>
             <label>IJ Moduvéo (€/jour)</label>
@@ -135,6 +146,7 @@
             <label><input type="checkbox" id="modAuto" checked/> Calibrer automatiquement pour combler le salaire cible</label>
           </div>
         </div>
+
         <div class="hint" id="modHint" style="margin-top:4px"></div>
       </div>
 
@@ -152,39 +164,39 @@
       </div>
 
       <div id="warn" class="warnBanner">⚠️ Donnée RO manquante pour cette caisse/scénario.</div>
-
-      <div style="margin-top: 20px;">
-        <h3>Exemples courants</h3>
-        <div class="btn-group" style="display:flex; flex-wrap:wrap; gap:8px;">
-          <button id="btnMaladie30j" class="btn ghost small">Maladie 30 j</button>
-          <button id="btnAccident45j" class="btn ghost small">Accident 45 j</button>
-          <button id="btnHospitalisation7j" class="btn ghost small">Hospitalisation 7 j</button>
-          <button id="btnBurnout90j" class="btn ghost small">Burnout 90 j</button>
-          <button id="btnBlessureSport15j" class="btn ghost small">Blessure (sport) 15 j</button>
-          <button id="btnArretLong" class="btn ghost small">Arrêt long 1 an</button>
-        </div>
-        <div class="hint" style="margin-top: 8px;">Cliquez pour charger un scénario type et simuler les revenus.</div>
-      </div>
     </div>
 
     <!-- Colonne droite : KPI + Graph + Timeline -->
     <div class="col-8">
+      <!-- KPIs -->
       <div class="kpis">
         <div class="kpi" id="kA1Avec">
-          <h3>Indemnités mensuelles </h3>
+          <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+            <h3>Indemnités mensuelles</h3>
+            <button type="button" class="help" id="helpAvec" title="Détail du calcul">?</button>
+            <div class="help-bubble" id="bubbleAvec" role="dialog" aria-label="Détail indemnités mensuelles"></div>
+          </div>
           <div class="v" id="vA1Avec">—</div>
           <div class="small" id="vA1AvecBreak">RO ≈ — / Moduvéo ≈ —</div>
           <div class="small" id="vA1AvecCov">Couverture : —%</div>
         </div>
 
         <div class="kpi" id="kA1Reste">
-          <h3>Reste à vivre <b>(après charges)</b></h3>
+          <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+            <h3>Reste à vivre (après charges)</h3>
+            <button type="button" class="help" id="helpReste" title="Détail du calcul">?</button>
+            <div class="help-bubble" id="bubbleReste" role="dialog" aria-label="Détail reste à vivre"></div>
+          </div>
           <div class="v" id="vA1Reste">—</div>
-          <div class="small" id="vPerteMensuelle">Perte de salaire : —/mois</div>
+          <div class="small">Objectif : salaire cible après charges</div>
         </div>
 
         <div class="kpi" id="kA1Sans">
-          <h3>Perte de revenu <b>(total sur l’arrêt)</b></h3>
+          <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+            <h3>Sans contrat</h3>
+            <button type="button" class="help" id="helpSans" title="Détail du calcul">?</button>
+            <div class="help-bubble" id="bubbleSans" role="dialog" aria-label="Détail sans contrat"></div>
+          </div>
           <div class="v" id="vA1Sans">—</div>
           <div class="small">
             Sur <input id="arretJours" type="number" min="1" value="30" style="width:80px"> jours d’arrêt
@@ -192,9 +204,12 @@
         </div>
       </div>
 
-      <!-- Encart unique : règle appliquée (Option C) -->
-      <div class="rule-box">Règle appliquée : <span id="ruleText">—</span></div>
+      <!-- Encart unique : règle appliquée -->
+      <div class="rule-box">
+        Règle appliquée : <span id="ruleText">—</span>
+      </div>
 
+      <!-- Graph -->
       <div class="card" style="margin-top:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
           <h2>2) Revenus vs Charges</h2>
@@ -203,6 +218,7 @@
         <canvas id="chart"></canvas>
       </div>
 
+      <!-- Pavé métier (timeline) -->
       <div class="card" style="margin-top:12px; position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
           <h2>3) Pavé métier (régime de base)</h2>
@@ -245,7 +261,10 @@
           <div class="tl-ruler" id="tlRuler"></div>
           <div class="tl-cursor" id="tlCursor" style="left:14px"></div>
 
-          <div class="tl-rightpanel"><h4>Pointage</h4><div id="tlPanelBody">Survolez la frise.</div></div>
+          <div class="tl-rightpanel">
+            <h4>Pointage</h4>
+            <div id="tlPanelBody">Survolez la frise.</div>
+          </div>
         </div>
 
         <div class="tl-summary" id="tlSummary"></div>
@@ -254,26 +273,8 @@
   </div>
 </div>
 
-<!-- IMPORTANT : ton fichier JS s'appelle 'app.js' -->
+<!-- Scripts -->
 <script src="app.js"></script>
-<script>
-// Micro-entreprise : toggle de la bulle d'aide (facultatif)
-(function(){
-  const btn = document.getElementById('microHelp');
-  const bubble = document.getElementById('microHelpBubble');
-  if(btn && bubble){
-    btn.addEventListener('click', (e)=>{
-      const open = btn.classList.contains('open');
-      document.querySelectorAll('.help').forEach(b=>b.classList.remove('open'));
-      if(!open) btn.classList.add('open');
-      e.stopPropagation();
-    });
-  }
-})();
-// Fermer les bulles si clic ailleurs
-document.addEventListener('click', ()=>{
-  document.querySelectorAll('.help').forEach(b=>b.classList.remove('open'));
-});
-</script>
+<!-- (Aucun script inline ici : on laisse app.js gérer la bulle et le reste) -->
 </body>
 </html>
