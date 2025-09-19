@@ -11,11 +11,29 @@
 
   <!-- Styles -->
   <link rel="stylesheet" href="style.css">
+
+  <style>
+    /* encart "règle appliquée" */
+    .rule-box {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: #101725;
+      border: 1px solid #2a3b58;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #cfe1f7;
+    }
+    /* bulle micro au-dessus */
+    #microHelpBubble {
+      top: auto !important;
+      bottom: 30px; /* au-dessus du bouton */
+    }
+  </style>
 </head>
 <body>
 <div class="wrap">
   <!-- Header -->
-  <div class="header">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
     <div>
       <h1>Régime obligatoire + Moduvéo PRO = Salaire reconstitué</h1>
       <div class="hint">
@@ -39,7 +57,7 @@
         <option value="lib_nr">Profession libérale non réglementée (URSSAF)</option>
       </select>
 
-      <div class="grid two">
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px">
         <div>
           <label>Salaire net mensuel (€/mois)</label>
           <input id="salaireM" inputmode="decimal" placeholder="ex: 3000"/>
@@ -50,12 +68,12 @@
         </div>
       </div>
 
-      <div class="grid two mt6">
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:6px">
         <div>
           <label>Salaire <u>cible</u> (€/mois)</label>
           <input id="cibleM" inputmode="decimal" placeholder="= Salaire net"/>
         </div>
-        <div class="flex-end">
+        <div class="flex" style="align-items:end">
           <label><input type="checkbox" id="cibleSame" checked/> Utiliser le salaire net</label>
         </div>
       </div>
@@ -72,7 +90,7 @@
         <input id="age" inputmode="numeric" placeholder="ex: 45"/>
       </div>
 
-      <div class="grid two mt6">
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:6px">
         <div>
           <label>Carence <u>création</u> RO (jours)</label>
           <input id="carenceCreation" inputmode="numeric" value="0"/>
@@ -80,21 +98,19 @@
         </div>
 
         <!-- Bloc micro-entreprise -->
-        <div class="card mt6" id="micro-entreprise-block">
-          <div class="flex-wrap">
-            <label class="m0">
+        <div class="card" style="margin-top:6px" id="micro-entreprise-block">
+          <div class="flex" style="align-items:center; gap:12px; flex-wrap:wrap">
+            <label style="margin:0">
               <input type="checkbox" id="microEntrepriseCheck" /> Micro-entreprise
             </label>
 
-            <!-- Le seul “?” conservé + bulle (au-dessus) -->
-            <div class="help-wrap" data-pos="top">
-              <button type="button" class="help" id="microHelp" aria-expanded="false" title="Informations micro-entreprise">?</button>
-              <div class="help-bubble" id="microHelpBubble" role="dialog" aria-label="Aide micro-entreprise">
-                <div><b>Conversion automatique</b> : CA × coef. forfait</div>
-                <div>• BIC vente <b>0,29</b> • BIC services <b>0,50</b> • BNC libéral <b>0,66</b></div>
-                <hr>
-                <div><b>Seuil réglementaire</b> : si <i>revenu retenu</i> &lt; <b>4 710 €</b> ⇒ <b>IJ SSI = 0 €</b>.</div>
-              </div>
+            <!-- Seul ? conservé -->
+            <button type="button" class="help" id="microHelp" title="Informations micro-entreprise">?</button>
+            <div class="help-bubble" id="microHelpBubble" role="dialog" aria-label="Aide micro-entreprise">
+              <div><b>Conversion automatique</b> : CA × coef. forfait</div>
+              <div>• BIC vente <b>0,29</b> • BIC services <b>0,50</b> • BNC libéral <b>0,66</b></div>
+              <hr>
+              <div><b>Seuil réglementaire</b> : si <i>revenu retenu</i> &lt; <b>4 710 €</b> ⇒ <b>IJ SSI = 0 €</b>.</div>
             </div>
 
             <select id="microAct" disabled>
@@ -104,19 +120,19 @@
             </select>
 
             <input id="microCA" inputmode="decimal" placeholder="Chiffre d’affaires (€/an)" disabled />
-            <span id="microSummary" class="small op9"></span>
+            <span id="microSummary" class="small" style="opacity:.9"></span>
           </div>
         </div>
       </div>
 
-      <div class="flex mt6">
+      <div class="flex" style="margin-top:6px">
         <label><input type="checkbox" id="affiliation-check"/> Affiliation &lt; 12 mois</label>
       </div>
 
       <!-- Contrat Moduvéo -->
-      <div class="card mt10">
-        <h3 class="h3tight">Contrat Moduvéo PRO</h3>
-        <div class="grid two">
+      <div class="card" style="margin-top:10px">
+        <h3 style="margin:0 0 6px">Contrat Moduvéo PRO</h3>
+        <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px">
           <div>
             <label>Franchise Moduvéo (jours)</label>
             <input id="franchiseMod" inputmode="numeric" value="15"/>
@@ -127,27 +143,27 @@
           </div>
         </div>
 
-        <div class="grid two mt6">
+        <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:6px">
           <div>
             <label>IJ Moduvéo (€/jour)</label>
             <input id="ijModCustom" inputmode="decimal" placeholder="auto"/>
           </div>
-          <div class="flex-end">
+          <div class="flex" style="align-items:end">
             <label><input type="checkbox" id="modAuto" checked/> Calibrer automatiquement pour combler le salaire cible</label>
           </div>
         </div>
 
-        <div class="hint mt4" id="modHint"></div>
+        <div class="hint" id="modHint" style="margin-top:4px"></div>
       </div>
 
-      <div class="grid two mt8">
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px; margin-top:8px">
         <div>
           <label>Horizon (mois)</label>
           <input id="horizon" inputmode="numeric" value="60"/>
         </div>
         <div>
           <label>Vue</label>
-          <div class="btn-group">
+          <div class="btn-group" style="display:flex; gap:8px">
             <button id="btnView" class="btn" style="flex:1">🗓 Mois/Année</button>
           </div>
         </div>
@@ -174,7 +190,7 @@
         </div>
 
         <div class="kpi" id="kA1Sans">
-          <h3>Sans Moduvéo (total de perte)</h3>
+          <h3>Sans contrat</h3>
           <div class="v" id="vA1Sans">—</div>
           <div class="small">
             Sur <input id="arretJours" type="number" min="1" value="30" style="width:80px"> jours d’arrêt
@@ -182,25 +198,24 @@
         </div>
       </div>
 
-      <!-- Encart unique : règle appliquée -->
       <div class="rule-box">Règle appliquée : <span id="ruleText">—</span></div>
 
       <!-- Graph -->
-      <div class="card mt12">
-        <div class="card-header">
+      <div class="card" style="margin-top:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
           <h2>2) Revenus vs Charges</h2>
           <div class="small">Barres empilées = RO + Moduvéo • Lignes = Charges, <b>Salaire cible</b>, RO seul</div>
         </div>
         <canvas id="chart"></canvas>
       </div>
 
-      <!-- Pavé métier (timeline) -->
-      <div class="card mt12 pos-rel">
-        <div class="card-header">
+      <!-- Timeline -->
+      <div class="card" style="margin-top:12px; position:relative">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
           <h2>3) Pavé métier (régime de base)</h2>
           <div class="small">Frise d’indemnisation : carence création / carence RO • CPAM • caisse pro • Moduvéo</div>
         </div>
-        <div id="paveMetier" class="hint mb8"></div>
+        <div id="paveMetier" class="hint" style="margin-bottom:8px"></div>
 
         <div class="tl-topbar">
           <div class="tl-controls">
@@ -249,7 +264,7 @@
   </div>
 </div>
 
-<!-- JS (aucun script inline ici) -->
+<!-- Scripts -->
 <script src="app.js"></script>
 </body>
 </html>
