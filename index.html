@@ -12,8 +12,8 @@
   <!-- Styles -->
   <link rel="stylesheet" href="style.css">
 
-  <!-- Style local pour l’encart "règle appliquée" -->
   <style>
+    /* encart "règle appliquée" */
     .rule-box {
       margin-top: 10px;
       padding: 8px 12px;
@@ -22,6 +22,11 @@
       border-radius: 8px;
       font-size: 0.9rem;
       color: #cfe1f7;
+    }
+    /* bulle micro au-dessus */
+    #microHelpBubble {
+      top: auto !important;
+      bottom: 30px; /* au-dessus du bouton */
     }
   </style>
 </head>
@@ -99,7 +104,7 @@
               <input type="checkbox" id="microEntrepriseCheck" /> Micro-entreprise
             </label>
 
-            <!-- Bouton aide + bulle (gérés par app.js et .help.open + .help-bubble) -->
+            <!-- Seul ? conservé -->
             <button type="button" class="help" id="microHelp" title="Informations micro-entreprise">?</button>
             <div class="help-bubble" id="microHelpBubble" role="dialog" aria-label="Aide micro-entreprise">
               <div><b>Conversion automatique</b> : CA × coef. forfait</div>
@@ -124,6 +129,7 @@
         <label><input type="checkbox" id="affiliation-check"/> Affiliation &lt; 12 mois</label>
       </div>
 
+      <!-- Contrat Moduvéo -->
       <div class="card" style="margin-top:10px">
         <h3 style="margin:0 0 6px">Contrat Moduvéo PRO</h3>
         <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px">
@@ -168,35 +174,23 @@
 
     <!-- Colonne droite : KPI + Graph + Timeline -->
     <div class="col-8">
-      <!-- KPIs -->
+      <!-- KPIs (sans bulles) -->
       <div class="kpis">
         <div class="kpi" id="kA1Avec">
-          <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
-            <h3>Indemnités mensuelles</h3>
-            <button type="button" class="help" id="helpAvec" title="Détail du calcul">?</button>
-            <div class="help-bubble" id="bubbleAvec" role="dialog" aria-label="Détail indemnités mensuelles"></div>
-          </div>
+          <h3>Indemnités mensuelles</h3>
           <div class="v" id="vA1Avec">—</div>
           <div class="small" id="vA1AvecBreak">RO ≈ — / Moduvéo ≈ —</div>
           <div class="small" id="vA1AvecCov">Couverture : —%</div>
         </div>
 
         <div class="kpi" id="kA1Reste">
-          <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
-            <h3>Reste à vivre (après charges)</h3>
-            <button type="button" class="help" id="helpReste" title="Détail du calcul">?</button>
-            <div class="help-bubble" id="bubbleReste" role="dialog" aria-label="Détail reste à vivre"></div>
-          </div>
+          <h3>Reste à vivre (après charges)</h3>
           <div class="v" id="vA1Reste">—</div>
           <div class="small">Objectif : salaire cible après charges</div>
         </div>
 
         <div class="kpi" id="kA1Sans">
-          <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
-            <h3>Sans contrat</h3>
-            <button type="button" class="help" id="helpSans" title="Détail du calcul">?</button>
-            <div class="help-bubble" id="bubbleSans" role="dialog" aria-label="Détail sans contrat"></div>
-          </div>
+          <h3>Sans contrat</h3>
           <div class="v" id="vA1Sans">—</div>
           <div class="small">
             Sur <input id="arretJours" type="number" min="1" value="30" style="width:80px"> jours d’arrêt
@@ -204,10 +198,7 @@
         </div>
       </div>
 
-      <!-- Encart unique : règle appliquée -->
-      <div class="rule-box">
-        Règle appliquée : <span id="ruleText">—</span>
-      </div>
+      <div class="rule-box">Règle appliquée : <span id="ruleText">—</span></div>
 
       <!-- Graph -->
       <div class="card" style="margin-top:12px">
@@ -218,7 +209,7 @@
         <canvas id="chart"></canvas>
       </div>
 
-      <!-- Pavé métier (timeline) -->
+      <!-- Timeline -->
       <div class="card" style="margin-top:12px; position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
           <h2>3) Pavé métier (régime de base)</h2>
@@ -275,6 +266,5 @@
 
 <!-- Scripts -->
 <script src="app.js"></script>
-<!-- (Aucun script inline ici : on laisse app.js gérer la bulle et le reste) -->
 </body>
 </html>
