@@ -23,11 +23,6 @@
       font-size: 0.9rem;
       color: #cfe1f7;
     }
-    /* bulle micro au-dessus */
-    #microHelpBubble {
-      top: auto !important;
-      bottom: 30px; /* au-dessus du bouton */
-    }
   </style>
 </head>
 <body>
@@ -104,14 +99,22 @@
               <input type="checkbox" id="microEntrepriseCheck" /> Micro-entreprise
             </label>
 
-            <!-- Seul ? conservé -->
-            <button type="button" class="help" id="microHelp" title="Informations micro-entreprise">?</button>
-            <div class="help-bubble" id="microHelpBubble" role="dialog" aria-label="Aide micro-entreprise">
-              <div><b>Conversion automatique</b> : CA × coef. forfait</div>
-              <div>• BIC vente <b>0,29</b> • BIC services <b>0,50</b> • BNC libéral <b>0,66</b></div>
-              <hr>
-              <div><b>Seuil réglementaire</b> : si <i>revenu retenu</i> &lt; <b>4 710 €</b> ⇒ <b>IJ SSI = 0 €</b>.</div>
-            </div>
+            <!-- Seul ? conservé — BULLE AU-DESSUS -->
+            <span class="help-wrap" style="position:relative;display:inline-block">
+              <button type="button" class="help" id="microHelp" title="Informations micro-entreprise">?</button>
+              <div
+                class="help-bubble"
+                id="microHelpBubble"
+                role="dialog"
+                aria-label="Aide micro-entreprise"
+                style="top:auto; bottom:calc(100% + 8px); right:0;"
+              >
+                <div><b>Conversion automatique</b> : CA × coef. forfait</div>
+                <div>• BIC vente <b>0,29</b> • BIC services <b>0,50</b> • BNC libéral <b>0,66</b></div>
+                <hr>
+                <div><b>Seuil réglementaire</b> : si <i>revenu retenu</i> &lt; <b>4 710 €</b> ⇒ <b>IJ SSI = 0 €</b>.</div>
+              </div>
+            </span>
 
             <select id="microAct" disabled>
               <option value="bic_vente">BIC vente</option>
